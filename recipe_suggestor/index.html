@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Recipe Suggester & Shopper (Python Backend)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.s linear infinite;
+        }
+
+        @-webkit-keyframes spinner {
+            0% {
+                -webkit-transform: rotate(0deg);
+            }
+
+            100% {
+                -webkit-transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spinner {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border: 1px solid #f5c6cb;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">AI Recipe Suggester & Shopper</h1>
+            <p class="text-gray-600 mt-2">Powered by a Python backend. Get recipe ideas and instantly check for
+                ingredients.</p>
+        </header>
+
+        <main>
+            <!-- Prompt Section -->
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+                <label for="prompt-input" class="block text-lg font-semibold mb-2">What are you in the mood for?</label>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <input type="text" id="prompt-input"
+                        class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                        placeholder="e.g., 'a quick vegan lunch' or 'something with chicken and pasta'">
+                    <button id="generate-btn"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 flex items-center justify-center">
+                        <span id="generate-btn-text">Generate Recipe</span>
+                        <svg id="loading-indicator"
+                            class="hidden loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-5 w-5 ml-2"
+                            viewBox="0 0 24 24"></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            <div id="error-container" class="hidden"></div>
+
+            <!-- Results Section -->
+            <div class="grid md:grid-cols-2 gap-8">
+                <!-- Recipe Column -->
+                <div id="recipe-section" class="bg-white p-6 rounded-xl shadow-lg hidden">
+                    <div id="recipe-container">
+                        <!-- Recipe content will be injected here -->
+                    </div>
+                </div>
+
+                <!-- Shopping List Column -->
+                <div id="shopping-section" class="bg-white p-6 rounded-xl shadow-lg hidden">
+                    <div id="shopping-list-container">
+                        <!-- Shopping list will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const BACKEND_URL = 'http://127.0.0.1:5001'; // The address of your local Python backend
+
+        // --- DOM Elements ---
+        const promptInput = document.getElementById('prompt-input');
+        const generateBtn = document.getElementById('generate-btn');
+        const generateBtnText = document.getElementById('generate-btn-text');
+        const recipeContainer = document.getElementById('recipe-container');
+        const shoppingListContainer = document.getElementById('shopping-list-container');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const recipeSection = document.getElementById('recipe-section');
+        const shoppingSection = document.getElementById('shopping-section');
+        const errorContainer = document.getElementById('error-container');
+
+        // --- State ---
+        let currentRecipe = null;
+
+        // --- API Calls to Python Backend ---
+        async function fetchRecipeFromBackend(prompt) {
+            setLoading(true, 'Generating...');
+            clearError();
+            try {
+                const response = await fetch(`${BACKEND_URL}/generate-recipe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || `HTTP error! Status: ${response.status}`);
+                }
+
+                const recipe = await response.json();
+                currentRecipe = recipe; // Store the recipe
+                displayRecipe(recipe);
+
+            } catch (error) {
+                console.error('Error fetching recipe:', error);
+                showError(`Failed to get recipe: ${error.message}. Is the Python backend running?`);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function findIngredientsOnBackend() {
+            if (!currentRecipe || !currentRecipe.ingredients) return;
+
+            setLoading(true, 'Finding Ingredients...');
+            clearError();
+            try {
+                const response = await fetch(`${BACKEND_URL}/find-ingredients`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ingredients: currentRecipe.ingredients })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || `HTTP error! Status: ${response.status}`);
+                }
+
+                const shoppingList = await response.json();
+                displayShoppingList(shoppingList);
+
+            } catch (error) {
+                console.error('Error fetching shopping list:', error);
+                showError(`Failed to get shopping list: ${error.message}`);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+
+        // --- UI Display Functions ---
+        function setLoading(isLoading, text = 'Generate Recipe') {
+            generateBtn.disabled = isLoading;
+            if (isLoading) {
+                loadingIndicator.classList.remove('hidden');
+                generateBtnText.textContent = text;
+            } else {
+                loadingIndicator.classList.add('hidden');
+                generateBtnText.textContent = 'Generate Recipe';
+            }
+        }
+
+        function showError(message) {
+            errorContainer.innerHTML = `<div class="error-message">${message}</div>`;
+            errorContainer.classList.remove('hidden');
+            // Hide other sections
+            recipeSection.classList.add('hidden');
+            shoppingSection.classList.add('hidden');
+        }
+
+        function clearError() {
+            errorContainer.classList.add('hidden');
+            errorContainer.innerHTML = '';
+        }
+
+        function displayRecipe(recipe) {
+            recipeSection.classList.remove('hidden');
+            shoppingSection.classList.add('hidden'); // Hide old shopping list
+            recipeContainer.innerHTML = `
+                <h2 class="text-2xl font-bold mb-2">${recipe.name}</h2>
+                <p class="text-gray-600 mb-4">${recipe.description}</p>
+                <div class="mb-4">
+                    <h3 class="text-xl font-semibold mb-2">Ingredients</h3>
+                    <ul class="list-disc list-inside space-y-1">
+                        ${recipe.ingredients.map(ing => `<li>${ing}</li>`).join('')}
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold mb-2">Instructions</h3>
+                    <ol class="list-decimal list-inside space-y-2">
+                        ${recipe.instructions.map(step => `<li>${step}</li>`).join('')}
+                    </ol>
+                </div>
+                <button id="find-ingredients-btn" class="mt-6 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Find Ingredients</button>
+            `;
+            document.getElementById('find-ingredients-btn').addEventListener('click', findIngredientsOnBackend);
+        }
+
+        function displayShoppingList(shoppingList) {
+            shoppingSection.classList.remove('hidden');
+            shoppingListContainer.innerHTML = `
+                <h3 class="text-xl font-semibold mb-4">Shopping List</h3>
+                <ul class="space-y-3">
+                    ${shoppingList.map(item => `
+                        <li class="p-3 rounded-lg flex items-center justify-between ${item.found ? 'bg-green-100' : 'bg-red-100'}">
+                            <span class="font-medium">${item.name}</span>
+                            <span class="text-sm font-semibold ${item.found ? 'text-green-700' : 'text-red-700'}">${item.status}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+        }
+
+        // --- Event Listeners ---
+        generateBtn.addEventListener('click', () => {
+            const prompt = promptInput.value;
+            if (prompt) {
+                fetchRecipeFromBackend(prompt);
+            }
+        });
+
+        promptInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                generateBtn.click();
+            }
+        });
+    </script>
+</body>
+
+</html>
