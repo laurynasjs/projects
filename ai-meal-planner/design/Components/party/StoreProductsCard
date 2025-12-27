@@ -1,0 +1,80 @@
+import { Store, ExternalLink, ShoppingCart } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+export default function StoreProductsCard({ products, onExportToExtension }) {
+    if (!products || products.length === 0) return null;
+    
+    const totalPrice = products.reduce((sum, p) => sum + (p.price || 0), 0);
+    
+    const groupedByStore = products.reduce((acc, p) => {
+        const store = p.store || 'Other';
+        if (!acc[store]) acc[store] = [];
+        acc[store].push(p);
+        return acc;
+    }, {});
+    
+    return (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+                <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <Store className="h-4 w-4 text-blue-600" />
+                </div>
+                <h3 className="font-semibold text-slate-900">Store Products</h3>
+            </div>
+            
+            <div className="space-y-4">
+                {Object.entries(groupedByStore).map(([store, items]) => (
+                    <div key={store}>
+                        <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-medium text-slate-700">{store}</h4>
+                            <span className="text-xs text-slate-400">
+                                €{items.reduce((s, i) => s + (i.price || 0), 0).toFixed(2)}
+                            </span>
+                        </div>
+                        <div className="space-y-1.5">
+                            {items.map((product, idx) => (
+                                <div 
+                                    key={idx} 
+                                    className="flex items-center justify-between text-sm p-2 rounded-lg bg-slate-50 border border-slate-100"
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-slate-700 truncate">{product.product_name}</p>
+                                        <p className="text-xs text-slate-400">for: {product.ingredient}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 ml-2">
+                                        <span className="text-slate-600 font-medium">€{product.price?.toFixed(2)}</span>
+                                        {product.url && (
+                                            <a 
+                                                href={product.url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-slate-400 hover:text-blue-500"
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-slate-500">Estimated Total</span>
+                    <span className="text-lg font-semibold text-slate-900">€{totalPrice.toFixed(2)}</span>
+                </div>
+                
+                <Button 
+                    onClick={onExportToExtension}
+                    className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700"
+                >
+                    <ShoppingCart className="h-4 w-4 mr-2" />
+                    Export to Cart
+                </Button>
+            </div>
+        </div>
+    );
+}

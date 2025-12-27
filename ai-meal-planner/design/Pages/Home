@@ -1,0 +1,196 @@
+import { useState, useEffect, useRef } from 'react';
+import { base44 } from '@/api/base44Client';
+import { Sparkles, PartyPopper } from 'lucide-react';
+import { toast } from 'sonner';
+
+import ChatMessage from '@/components/party/ChatMessage';
+import ChatInput from '@/components/party/ChatInput';
+import QuickPrompts from '@/components/party/QuickPrompts';
+import MenuCard from '@/components/party/MenuCard';
+import IngredientsCard from '@/components/party/IngredientsCard';
+import StoreProductsCard from '@/components/party/StoreProductsCard';
+import RecipeCarousel from '@/components/party/RecipeCarousel';
+
+export default function Home() {
+    const [conversation, setConversation] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [partyData, setPartyData] = useState(null);
+    const messagesEndRef = useRef(null);
+    
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+    
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+    
+    useEffect(() => {
+        if (!conversation?.id) return;
+        
+        const unsubscribe = base44.agents.subscribeToConversation(conversation.id, (data) => {
+            setMessages(data.messages || []);
+            
+            // Extract party data from tool call results
+            const lastAssistantMsg = [...(data.messages || [])].reverse().find(m => m.role === 'assistant');
+            if (lastAssistantMsg?.tool_calls) {
+                lastAssistantMsg.tool_calls.forEach(tc => {
+                    if (tc.results && (tc.status === 'completed' || tc.status === 'success')) {
+                        try {
+                            const result = typeof tc.results === 'string' ? JSON.parse(tc.results) : tc.results;
+                            if (result.menu || result.ingredients || result.store_products) {
+                                setPartyData(prev => ({
+                                    ...prev,
+                                    ...result
+                                }));
+                            }
+                        } catch (e) {}
+                    }
+                });
+            }
+        });
+        
+        return () => unsubscribe();
+    }, [conversation?.id]);
+    
+    const startConversation = async () => {
+        const newConv = await base44.agents.createConversation({
+            agent_name: 'party_planner',
+            metadata: { name: 'Party Planning Session' }
+        });
+        setConversation(newConv);
+        setMessages([]);
+        setPartyData(null);
+        return newConv;
+    };
+    
+    const sendMessage = async (content) => {
+        setIsLoading(true);
+        
+        let activeConv = conversation;
+        if (!activeConv) {
+            activeConv = await startConversation();
+        }
+        
+        await base44.agents.addMessage(activeConv, {
+            role: 'user',
+            content
+        });
+        
+        setIsLoading(false);
+    };
+    
+    const handleExportToExtension = () => {
+        if (!partyData?.store_products) {
+            toast.error('No products to export');
+            return;
+        }
+        
+        const cartData = {
+            type: 'PARTY_PLANNER_CART',
+            products: partyData.store_products,
+            timestamp: Date.now()
+        };
+        
+        // Dispatch custom event for Chrome extension
+        window.dispatchEvent(new CustomEvent('partyPlannerExport', { detail: cartData }));
+        
+        // Also store in localStorage for extension to pick up
+        localStorage.setItem('partyPlannerCart', JSON.stringify(cartData));
+        
+        toast.success('Cart data exported! Open the extension on Barbora.lt or Lastmile.lt');
+    };
+    
+    const hasContent = messages.length > 0;
+    
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-fuchsia-50/30">
+            <div className="max-w-7xl mx-auto px-4 py-6">
+                {/* Header */}
+                <header className="text-center mb-8">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 shadow-sm mb-4">
+                        <PartyPopper className="h-4 w-4 text-violet-500" />
+                        <span className="text-sm font-medium text-slate-600">AI Party Planner</span>
+                    </div>
+                    <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+                        Plan Your Perfect Party
+                    </h1>
+                    <p className="text-slate-500 max-w-md mx-auto">
+                        Tell me about your party and I'll create a menu, ingredient list, and shopping cart
+                    </p>
+                </header>
+                
+                <div className="grid lg:grid-cols-3 gap-6">
+                    {/* Chat Panel */}
+                    <div className="lg:col-span-2">
+                        <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            {/* Messages Area */}
+                            <div className="h-[500px] overflow-y-auto p-4 space-y-4">
+                                {!hasContent ? (
+                                    <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                                        <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mb-4">
+                                            <Sparkles className="h-8 w-8 text-white" />
+                                        </div>
+                                        <h2 className="text-lg font-semibold text-slate-900 mb-2">
+                                            Ready to plan your party?
+                                        </h2>
+                                        <p className="text-sm text-slate-500 mb-6 max-w-sm">
+                                            Describe your party theme, guest count, and any preferences. I'll handle the rest!
+                                        </p>
+                                        <QuickPrompts onSelect={sendMessage} />
+                                    </div>
+                                ) : (
+                                    <>
+                                        {messages.map((msg, idx) => (
+                                            <ChatMessage key={idx} message={msg} />
+                                        ))}
+                                        <div ref={messagesEndRef} />
+                                    </>
+                                )}
+                            </div>
+                            
+                            {/* Input Area */}
+                            <div className="p-4 border-t border-slate-100 bg-white/80">
+                                <ChatInput 
+                                    onSend={sendMessage}
+                                    isLoading={isLoading}
+                                    placeholder="Describe your party... (e.g., Mexican theme for 6 guests)"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Right Sidebar */}
+                    <div className="space-y-4">
+                        {/* Recipe Carousel - Always visible */}
+                        <RecipeCarousel onSelectRecipe={sendMessage} />
+                        
+                        {/* Results Cards */}
+                        {partyData?.menu && (
+                            <MenuCard menu={partyData.menu} />
+                        )}
+                        
+                        {partyData?.ingredients && (
+                            <IngredientsCard ingredients={partyData.ingredients} />
+                        )}
+                        
+                        {partyData?.store_products && (
+                            <StoreProductsCard 
+                                products={partyData.store_products}
+                                onExportToExtension={handleExportToExtension}
+                            />
+                        )}
+                    </div>
+                </div>
+                
+                {/* Extension Info */}
+                <div className="mt-8 text-center">
+                    <p className="text-xs text-slate-400">
+                        💡 Install our Chrome extension to automatically add products to your Barbora.lt or Lastmile.lt cart
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}

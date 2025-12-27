@@ -1,0 +1,23 @@
+const prompts = [
+    { emoji: "🌮", text: "Mexican theme party for 6" },
+    { emoji: "🍝", text: "Italian dinner for 8 guests" },
+    { emoji: "🍣", text: "Sushi night for 4 people" },
+    { emoji: "🥗", text: "Healthy brunch for 10" },
+];
+
+export default function QuickPrompts({ onSelect }) {
+    return (
+        <div className="flex flex-wrap gap-2">
+            {prompts.map((prompt, idx) => (
+                <button
+                    key={idx}
+                    onClick={() => onSelect(prompt.text)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-full bg-white border border-slate-200 text-sm text-slate-600 hover:border-violet-300 hover:bg-violet-50 transition-all"
+                >
+                    <span>{prompt.emoji}</span>
+                    <span>{prompt.text}</span>
+                </button>
+            ))}
+        </div>
+    );
+}

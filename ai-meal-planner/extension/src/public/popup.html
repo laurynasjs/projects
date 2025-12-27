@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Shopping Helper</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            width: 280px;
+            padding: 10px;
+        }
+
+        h3,
+        h4 {
+            margin: 10px 0 5px 0;
+            text-align: center;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        textarea {
+            width: calc(100% - 20px);
+            height: 80px;
+            padding: 8px;
+            margin-bottom: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        input {
+            width: calc(100% - 20px);
+            padding: 8px;
+            margin-bottom: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid #ddd;
+            margin: 15px 0;
+        }
+
+        #status-container {
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #f3f3f3;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 11px;
+            color: #333;
+            min-height: 15px;
+        }
+
+        .manual-controls button {
+            font-size: 12px;
+            padding: 8px;
+        }
+
+        .section-description {
+            font-size: 11px;
+            color: #666;
+            margin: 5px 0;
+            text-align: center;
+        }
+
+        /* Button colors */
+        #increase-btn {
+            background-color: #e6f3ff;
+        }
+
+        #decrease-btn {
+            background-color: #fff0e6;
+        }
+
+        #remove-btn {
+            background-color: #fde8e8;
+        }
+    </style>
+</head>
+
+<body>
+    <h3>🛒 Shopping Helper</h3>
+
+    <!-- Quick Add Section -->
+    <h4>Quick Add</h4>
+    <p class="section-description">Search and add a single item</p>
+    <input type="text" id="searchInput" placeholder="e.g., pienas/2 or kiaušiniai/3">
+    <button id="searchAndAddBtn">Search & Add to Cart</button>
+
+    <hr>
+
+    <!-- Bulk Add Section -->
+    <h4>Bulk Add</h4>
+    <p class="section-description">Process multiple items at once</p>
+    <textarea id="shoppingList" placeholder="Pienas&#10;Duona&#10;Kiaušiniai 2"></textarea>
+    <button id="processListBtn">Process Shopping List</button>
+
+    <hr>
+
+    <!-- Manual Controls -->
+    <div class="manual-controls">
+        <h4>Manual Controls</h4>
+        <p class="section-description">Adjust quantity on product page</p>
+        <button id="increase-btn">Increase Quantity (+)</button>
+        <button id="decrease-btn">Decrease Quantity (-)</button>
+        <button id="remove-btn">Remove From Cart</button>
+    </div>
+
+    <div id="status-container">
+        Ready
+    </div>
+    <script src="popup.js" defer></script>
+</body>
+
+</html>

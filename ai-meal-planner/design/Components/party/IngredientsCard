@@ -1,0 +1,42 @@
+import { ShoppingBasket } from 'lucide-react';
+
+export default function IngredientsCard({ ingredients }) {
+    if (!ingredients || ingredients.length === 0) return null;
+
+    const grouped = ingredients.reduce((acc, ing) => {
+        const cat = ing.category || 'Other';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(ing);
+        return acc;
+    }, {});
+
+    return (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+                <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                    <ShoppingBasket className="h-4 w-4 text-emerald-600" />
+                </div>
+                <h3 className="font-semibold text-slate-900">Ingredients</h3>
+                <span className="text-xs text-slate-400 ml-auto">{ingredients.length} items</span>
+            </div>
+
+            <div className="space-y-4">
+                {Object.entries(grouped).map(([category, items]) => (
+                    <div key={category}>
+                        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
+                            {category}
+                        </h4>
+                        <div className="space-y-1">
+                            {items.map((ing, idx) => (
+                                <div key={idx} className="flex justify-between text-sm py-1.5 px-2 rounded-lg hover:bg-slate-50">
+                                    <span className="text-slate-700">{ing.name}</span>
+                                    <span className="text-slate-400">{ing.quantity} {ing.unit}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}

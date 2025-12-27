@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>AI Meal Planner - Multi-Store Price Comparison</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .status.loading {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .meal-plan {
+            margin-bottom: 30px;
+        }
+
+        .meal {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        .meal h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .meal h4 {
+            margin-top: 15px;
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .meal ul,
+        .meal ol {
+            margin-left: 20px;
+        }
+
+        .meal li {
+            margin: 5px 0;
+            line-height: 1.6;
+        }
+
+        .shopping-section {
+            background: #f0f8ff;
+            padding: 25px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .shopping-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .price-comparison {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .store-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 2px solid transparent;
+        }
+
+        .store-option.recommended {
+            border-color: #4caf50;
+            background: #e8f5e9;
+        }
+
+        .store-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #4caf50;
+            color: white;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .shopping-list {
+            list-style: none;
+        }
+
+        .shopping-list li {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .shopping-list input[type="checkbox"] {
+            margin-right: 12px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .shopping-list .item-name {
+            flex-grow: 1;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .button-group button {
+            flex: 1;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍽️ AI Meal Planner</h1>
+            <p>Multi-store price comparison powered by AI</p>
+        </div>
+
+        <div class="content">
+            <div class="input-section">
+                <label for="preferences">Tell me what you need</label>
+                <textarea id="preferences"
+                    placeholder="Examples:&#10;• Plan meals for this week&#10;• I need 3 healthy dinners for 2 people&#10;• Suggest vegetarian lunch ideas&#10;• What should I cook today?"></textarea>
+
+                <button id="generateBtn">Generate Meal Plan</button>
+            </div>
+
+            <div id="status" class="hidden"></div>
+            <div id="results" class="results"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8008';
+        let currentSessionId = null;
+
+        const generateBtn = document.getElementById('generateBtn');
+        const preferencesInput = document.getElementById('preferences');
+        const statusDiv = document.getElementById('status');
+        const resultsDiv = document.getElementById('results');
+
+        function showStatus(message, type = 'loading') {
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            statusDiv.classList.remove('hidden');
+        }
+
+        function hideStatus() {
+            statusDiv.classList.add('hidden');
+        }
+
+        generateBtn.addEventListener('click', async () => {
+            const preferences = preferencesInput.value.trim();
+
+            if (!preferences) {
+                alert('Please tell me what you need');
+                return;
+            }
+
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Thinking...';
+            showStatus('AI is planning your meals...', 'loading');
+            resultsDiv.innerHTML = '';
+
+            try {
+                // Step 1: Generate meal plan (AI decides how many days)
+                const response = await fetch(`${API_BASE}/api/generate-plan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preferences })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                currentSessionId = data.session_id;
+
+                showStatus('Meal plan ready! Checking prices across stores...', 'success');
+                renderMealPlan(data.meal_plan);
+
+                // Step 2: Send shopping list to extension for price checking
+                const event = new CustomEvent('checkPricesMultiStore', {
+                    detail: {
+                        sessionId: currentSessionId,
+                        items: data.meal_plan.shopping_list,
+                        stores: ['barbora', 'rimi', 'maxima']
+                    }
+                });
+                window.dispatchEvent(event);
+
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus(`Error: ${error.message}`, 'error');
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate Meal Plan';
+            }
+        });
+
+        function renderMealPlan(mealPlan) {
+            let html = '<div class="meal-plan"><h2>Your Meal Plan</h2>';
+
+            mealPlan.meals.forEach((meal, index) => {
+                html += `
+                    <div class="meal">
+                        <h3>Day ${index + 1}: ${meal.title}</h3>
+                        <p>${meal.description}</p>
+                        <h4>Ingredients:</h4>
+                        <ul>
+                            ${meal.ingredients.map(ing => `<li>${ing}</li>`).join('')}
+                        </ul>
+                        <h4>Recipe:</h4>
+                        <ol>
+                            ${meal.recipe.map(step => `<li>${step}</li>`).join('')}
+                        </ol>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+
+            // Add shopping list section
+            html += `
+                <div class="shopping-section">
+                    <h3>📝 Shopping List (${mealPlan.shopping_list.length} items)</h3>
+                    <ul class="shopping-list" id="shopping-list-preview">
+            `;
+
+            mealPlan.shopping_list.forEach((item, index) => {
+                html += `<li><input type="checkbox" checked id="preview-item-${index}"><span class="item-name">${item}</span></li>`;
+            });
+
+            html += `
+                    </ul>
+                    <button class="btn-success" onclick="sendToBarboraDirectly()">🛒 Send to Barbora Extension</button>
+                </div>
+            `;
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function sendToBarboraDirectly() {
+            const items = [];
+            document.querySelectorAll('#shopping-list-preview li').forEach(li => {
+                const checkbox = li.querySelector('input[type="checkbox"]');
+                if (checkbox.checked) {
+                    const itemName = li.querySelector('.item-name').textContent;
+                    items.push({ name: itemName, quantity: 1 });
+                }
+            });
+
+            if (items.length === 0) {
+                alert('Please select at least one item');
+                return;
+            }
+
+            // Send to extension
+            const event = new CustomEvent('shoppingListFromWebApp', {
+                detail: { items }
+            });
+            window.dispatchEvent(event);
+
+            showStatus(`✅ Sent ${items.length} items to Barbora extension!`, 'success');
+            setTimeout(hideStatus, 3000);
+        }
+
+        // Listen for price comparison results from extension
+        window.addEventListener('priceComparisonReady', (event) => {
+            const decision = event.detail;
+            renderPriceComparison(decision);
+        });
+
+        function renderPriceComparison(decision) {
+            showStatus('Price comparison complete!', 'success');
+
+            let html = `
+                <div class="shopping-section">
+                    <h3>💰 Price Comparison</h3>
+                    <div class="price-comparison">
+                        <p><strong>Recommendation:</strong> ${decision.reason}</p>
+                        <h4 style="margin-top: 15px;">Store Comparison:</h4>
+            `;
+
+            decision.comparisons.forEach(comp => {
+                const isRecommended = comp.store === decision.recommended_store;
+                html += `
+                    <div class="store-option ${isRecommended ? 'recommended' : ''}">
+                        <div>
+                            <strong>${comp.store.toUpperCase()}</strong>
+                            ${isRecommended ? '<span class="store-badge">BEST PRICE</span>' : ''}
+                        </div>
+                        <div>
+                            <strong>€${comp.total_cost.toFixed(2)}</strong>
+                            ${comp.savings > 0 ? `<span style="color: #d32f2f; font-size: 14px;"> (+€${comp.savings.toFixed(2)})</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                    <h3 style="margin-top: 20px;">Shopping List</h3>
+                    <ul class="shopping-list" id="shopping-list-ul">
+            `;
+
+            decision.items.forEach((item, index) => {
+                html += `
+                    <li>
+                        <input type="checkbox" checked id="item-${index}">
+                        <span class="item-name">${item.name}</span>
+                        <span>€${item.price.toFixed(2)}</span>
+                    </li>
+                `;
+            });
+
+            html += `
+                    </ul>
+                    <div class="button-group">
+                        <button class="btn-secondary" onclick="copyShoppingList()">Copy List</button>
+                        <button class="btn-success" onclick="startShopping()">Shop at ${decision.recommended_store.toUpperCase()}</button>
+                    </div>
+                </div>
+            `;
+
+            resultsDiv.innerHTML += html;
+        }
+
+        function copyShoppingList() {
+            const items = [];
+            document.querySelectorAll('#shopping-list-ul li').forEach(li => {
+                const checkbox = li.querySelector('input[type="checkbox"]');
+                if (checkbox.checked) {
+                    items.push(li.querySelector('.item-name').textContent);
+                }
+            });
+            navigator.clipboard.writeText(items.join('\n'));
+            showStatus('Shopping list copied to clipboard!', 'success');
+            setTimeout(hideStatus, 3000);
+        }
+
+        function startShopping() {
+            const items = [];
+            document.querySelectorAll('#shopping-list-ul li').forEach(li => {
+                const checkbox = li.querySelector('input[type="checkbox"]');
+                if (checkbox.checked) {
+                    items.push({
+                        name: li.querySelector('.item-name').textContent,
+                        quantity: 1
+                    });
+                }
+            });
+
+            if (items.length === 0) {
+                alert('Please select at least one item');
+                return;
+            }
+
+            // Send to extension - must match event name extension listens for
+            const event = new CustomEvent('shoppingListFromWebApp', {
+                detail: { items }
+            });
+            window.dispatchEvent(event);
+
+            showStatus('Shopping list sent to extension! Opening Barbora...', 'success');
+            setTimeout(hideStatus, 3000);
+        }
+    </script>
+</body>
+
+</html>
