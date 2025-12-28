@@ -7,7 +7,10 @@ Modern React frontend for the AI Meal Planner application.
 - 🎨 Beautiful UI with Tailwind CSS
 - ⚡ Fast development with Vite
 - 🔄 Real-time meal plan generation
-- 🛒 Chrome extension integration
+- 📱 Tabbed Navigation (Ideas, Menu, Shop)
+- 🥗 Interactive Menu Selection
+- 🛒 Editable Shopping List
+- 🔌 Chrome extension integration
 - 📱 Responsive design
 
 ## Setup

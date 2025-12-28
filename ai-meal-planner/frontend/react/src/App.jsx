@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Sparkles, PartyPopper } from 'lucide-react';
 import ChatInput from './components/ChatInput';
 import QuickPrompts from './components/QuickPrompts';
-import MenuCard from './components/MenuCard';
+import MealsList from './components/MealsList';
 import IngredientsCard from './components/IngredientsCard';
 import RecipeCarousel from './components/RecipeCarousel';
+import TabNavigation from './components/TabNavigation';
 import { generateMealPlan, sendToExtension } from './api/client';
 
 export default function App() {
@@ -12,6 +13,8 @@ export default function App() {
     const [mealPlan, setMealPlan] = useState(null);
     const [error, setError] = useState(null);
     const [userMessage, setUserMessage] = useState('');
+    const [activeTab, setActiveTab] = useState('ideas');
+    const [selectedMeals, setSelectedMeals] = useState([]);
 
     const handleSendMessage = async (content) => {
         setIsLoading(true);
@@ -21,6 +24,10 @@ export default function App() {
         try {
             const result = await generateMealPlan(content);
             setMealPlan(result.meal_plan);
+            // Initialize all meals as selected
+            setSelectedMeals(result.meal_plan.meals.map((_, idx) => idx));
+            // Auto-switch to menu tab when meal plan is generated
+            setActiveTab('menu');
         } catch (err) {
             setError(err.message);
             console.error('Error generating meal plan:', err);
@@ -29,19 +36,28 @@ export default function App() {
         }
     };
 
-    const handleExportToExtension = () => {
-        if (!mealPlan?.shopping_list) {
-            alert('No shopping list to export');
-            return;
-        }
+    // Calculate shopping list based on selected meals
+    const getFilteredShoppingList = () => {
+        if (!mealPlan?.meals) return [];
 
-        const items = mealPlan.shopping_list.map(item => ({
-            name: item,
-            quantity: 1
-        }));
+        const selectedMealObjects = mealPlan.meals.filter((_, idx) =>
+            selectedMeals.includes(idx)
+        );
 
-        sendToExtension(items);
-        alert(`✅ Sent ${items.length} items to Barbora extension!`);
+        // Collect all unique ingredients from selected meals
+        const allIngredients = new Set();
+        selectedMealObjects.forEach(meal => {
+            if (meal.ingredients) {
+                meal.ingredients.forEach(ing => allIngredients.add(ing));
+            }
+        });
+
+        return Array.from(allIngredients);
+    };
+
+    const handleExportToExtension = (selectedItems) => {
+        sendToExtension(selectedItems);
+        alert(`✅ Sent ${selectedItems.length} items to Barbora extension!`);
     };
 
     const hasContent = mealPlan || userMessage;
@@ -143,21 +159,56 @@ export default function App() {
                         </div>
                     </div>
 
-                    {/* Right Sidebar */}
+                    {/* Right Sidebar with Tabs */}
                     <div className="space-y-4">
-                        {/* Recipe Carousel - Always visible */}
-                        <RecipeCarousel onSelectRecipe={handleSendMessage} />
+                        <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
-                        {/* Results Cards */}
-                        {mealPlan?.meals && (
-                            <MenuCard menu={mealPlan.meals} />
+                        {/* Tab Content */}
+                        {activeTab === 'ideas' && (
+                            <RecipeCarousel onSelectRecipe={handleSendMessage} />
                         )}
 
-                        {mealPlan?.shopping_list && (
-                            <IngredientsCard
-                                ingredients={mealPlan.shopping_list}
-                                onExportToExtension={handleExportToExtension}
-                            />
+                        {activeTab === 'menu' && (
+                            mealPlan?.meals ? (
+                                <MealsList
+                                    meals={mealPlan.meals}
+                                    selectedMeals={selectedMeals}
+                                    onMealToggle={(idx) => {
+                                        setSelectedMeals(prev =>
+                                            prev.includes(idx)
+                                                ? prev.filter(i => i !== idx)
+                                                : [...prev, idx]
+                                        );
+                                    }}
+                                />
+                            ) : (
+                                <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-slate-200 p-8 text-center">
+                                    <div className="h-12 w-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                                        <Sparkles className="h-6 w-6 text-slate-400" />
+                                    </div>
+                                    <p className="text-sm text-slate-500">
+                                        Generate a meal plan to see your menu here
+                                    </p>
+                                </div>
+                            )
+                        )}
+
+                        {activeTab === 'shop' && (
+                            getFilteredShoppingList().length > 0 ? (
+                                <IngredientsCard
+                                    ingredients={getFilteredShoppingList()}
+                                    onExportToExtension={handleExportToExtension}
+                                />
+                            ) : (
+                                <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-slate-200 p-8 text-center">
+                                    <div className="h-12 w-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                                        <Sparkles className="h-6 w-6 text-slate-400" />
+                                    </div>
+                                    <p className="text-sm text-slate-500">
+                                        Your shopping list will appear here after generating a meal plan
+                                    </p>
+                                </div>
+                            )
                         )}
                     </div>
                 </div>
