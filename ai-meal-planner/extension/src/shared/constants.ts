@@ -1,10 +1,10 @@
 export const CONFIG = {
     TIMEOUTS: {
-        ELEMENT_WAIT: 7000,
-        SEARCH_DELAY_MIN: 250,
-        SEARCH_DELAY_MAX: 750,
-        ITEM_DELAY: 2000,
-        QUANTITY_CLICK_DELAY: 250,
+        ELEMENT_WAIT: 5000,
+        SEARCH_DELAY_MIN: 100,
+        SEARCH_DELAY_MAX: 300,
+        ITEM_DELAY: 1000,
+        QUANTITY_CLICK_DELAY: 150,
     },
     SELECTORS: {
         SEARCH_INPUT: '#fti-search',

@@ -1,13 +1,19 @@
 // src/content_script.ts
 console.log('🔵 Content script starting to load...');
 
-import { ShoppingListItem, FailedItem } from './shared/types';
+import { ShoppingListItem, FailedItem, ScrapedProduct, MessageAction } from './shared/types';
 import { CONFIG } from './shared/constants';
 import { createLogger } from './shared/logger';
 import { BarboraDOM } from './content/dom-helpers';
+import { parseIngredient, parsePackageSize, calculatePackagesNeeded } from './shared/ingredient-parser';
 
 const logger = createLogger('CS');
 console.log('🟢 Content script imports loaded, logger created');
+
+// Internal interface for DOM operations
+interface ParsedProduct extends ScrapedProduct {
+    card: Element;
+}
 
 async function performAddToCart(item: ShoppingListItem, retryCount: number = 0): Promise<void> {
     logger.info(`🛒 Adding "${item.name}" to cart (attempt ${retryCount + 1}/${CONFIG.MAX_RETRIES + 1})`);
@@ -16,7 +22,7 @@ async function performAddToCart(item: ShoppingListItem, retryCount: number = 0):
         // Wait for product cards to load (no Shadow DOM needed)
         logger.info('⏳ Waiting for products to load...');
         await BarboraDOM.waitForElement(CONFIG.SELECTORS.PRODUCT_CARD);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // Parse current search results
         logger.info('📋 Parsing search results...');
@@ -37,11 +43,35 @@ async function performAddToCart(item: ShoppingListItem, retryCount: number = 0):
             throw new Error('No available products found');
         }
 
+        // Parse ingredient to get needed amount
+        const parsed = parseIngredient(item.name);
+        logger.info(`📊 Recipe needs: ${parsed.neededAmount}${parsed.unit} of "${parsed.name}"`);
+
         // Sort by unit price (lowest first)
         availableProducts.sort((a, b) => a.unitPrice - b.unitPrice);
         const bestProduct = availableProducts[0];
 
+        // Parse package size from product name
+        const packageInfo = parsePackageSize(bestProduct.name);
+        let packagesToAdd = 1;
+
+        if (packageInfo && parsed.unit !== 'none') {
+            packagesToAdd = calculatePackagesNeeded(
+                parsed.neededAmount,
+                parsed.unit,
+                packageInfo.size,
+                packageInfo.unit,
+                parsed.name
+            );
+            logger.info(`📦 Package size: ${packageInfo.size}${packageInfo.unit} → Need ${packagesToAdd} package(s)`);
+        } else {
+            logger.info(`📦 No package size detected or no quantity needed → Adding 1 package`);
+        }
+
         logger.info(`🏆 Best value: ${bestProduct.name} - €${bestProduct.price} (€${bestProduct.unitPrice}/${bestProduct.unit})`);
+
+        // Store calculated quantity for later use
+        const calculatedQuantity = packagesToAdd;
 
         // Find button in regular DOM (no Shadow DOM)
         logger.info('🔍 Looking for Add to Cart button...');
@@ -72,8 +102,8 @@ async function performAddToCart(item: ShoppingListItem, retryCount: number = 0):
         addButton.click();
         logger.info('✅ Button clicked!');
 
-        if (item.quantity > 1) {
-            logger.info(`🔢 Increasing quantity to ${item.quantity}...`);
+        if (calculatedQuantity > 1) {
+            logger.info(`🔢 Increasing quantity to ${calculatedQuantity} packages...`);
 
             // Wait for the product card to update with quantity controls
             const waitForQuantityButton = async (maxWaitMs: number = 5000): Promise<HTMLElement | null> => {
@@ -96,12 +126,12 @@ async function performAddToCart(item: ShoppingListItem, retryCount: number = 0):
             const increaseBtn = await waitForQuantityButton();
 
             if (increaseBtn) {
-                for (let i = 0; i < item.quantity - 1; i++) {
-                    logger.debug(`Clicking increase button (${i + 1}/${item.quantity - 1})`);
+                for (let i = 0; i < calculatedQuantity - 1; i++) {
+                    logger.debug(`Clicking increase button (${i + 1}/${calculatedQuantity - 1})`);
                     increaseBtn.click();
                     await new Promise(resolve => setTimeout(resolve, 300));
                 }
-                logger.info(`✅ Quantity increased to ${item.quantity}`);
+                logger.info(`✅ Quantity increased to ${calculatedQuantity} packages`);
             } else {
                 logger.warn('⚠️ Could not find quantity increase button - product added with quantity 1');
             }
@@ -129,22 +159,12 @@ async function performAddToCart(item: ShoppingListItem, retryCount: number = 0):
     }
 }
 
-interface ParsedProduct {
-    name: string;
-    price: number;
-    unitPrice: number;
-    unit: string;
-    available: boolean;
-    quantity: number;
-    card: Element;
-}
-
 async function parseSearchResults(): Promise<ParsedProduct[]> {
     logger.info('Parsing search results...');
 
     try {
         await BarboraDOM.waitForElement(CONFIG.SELECTORS.PRODUCT_CARD);
-        await new Promise(resolve => setTimeout(resolve, 500)); // Wait for content to render
+        await new Promise(resolve => setTimeout(resolve, 300)); // Wait for content to render
 
         const cards = document.querySelectorAll(CONFIG.SELECTORS.PRODUCT_CARD);
         const products: ParsedProduct[] = [];
@@ -169,6 +189,8 @@ async function parseSearchResults(): Promise<ParsedProduct[]> {
                 const linkElement = productDiv.querySelector('a[href*="/produktai/"]');
                 const imgElement = productDiv.querySelector('img[alt]');
                 const name = imgElement?.getAttribute('alt') || linkElement?.textContent?.trim() || 'Unknown';
+                const imageUrl = imgElement?.getAttribute('src') || undefined;
+                const url = linkElement?.getAttribute('href') || undefined;
 
                 // Extract price from meta tag (most reliable)
                 const priceMeta = productDiv.querySelector('meta[itemprop="price"]');
@@ -213,9 +235,10 @@ async function parseSearchResults(): Promise<ParsedProduct[]> {
                         price,
                         unitPrice,
                         unit,
+                        imageUrl,
+                        url,
                         available,
-                        quantity: 1,
-                        card
+                        card: card // Keep DOM element for internal use
                     });
 
                     logger.debug(`✅ Parsed: ${name} - €${price} (€${unitPrice}/${unit}) - ${available ? 'Available' : 'Out of stock'}`);
@@ -239,8 +262,14 @@ async function executeSearch(item: ShoppingListItem): Promise<void> {
     logger.info(`Executing search for: "${item.name}"`);
 
     try {
+        // Parse ingredient to extract just the name (without quantity)
+        const parsed = parseIngredient(item.name);
+        const searchTerm = parsed.name;
+
+        logger.info(`🔍 Searching for ingredient name only: "${searchTerm}" (needed: ${parsed.neededAmount}${parsed.unit})`);
+
         const searchInput = await BarboraDOM.waitForElement(CONFIG.SELECTORS.SEARCH_INPUT) as HTMLInputElement;
-        searchInput.value = item.name;
+        searchInput.value = searchTerm;
         searchInput.dispatchEvent(new Event('input', { bubbles: true }));
 
         const randomDelay = CONFIG.TIMEOUTS.SEARCH_DELAY_MIN +
@@ -266,6 +295,12 @@ window.addEventListener('shoppingListFromWebApp', (event: Event) => {
     const customEvent = event as CustomEvent;
     logger.info('Received shopping list from Web App', customEvent.detail);
     chrome.runtime.sendMessage({ action: "startShoppingJob", items: customEvent.detail.items });
+});
+
+window.addEventListener('priceCheckFromWebApp', (event: Event) => {
+    const customEvent = event as CustomEvent;
+    logger.info('Received price check request from Web App', customEvent.detail);
+    chrome.runtime.sendMessage({ action: "startPriceCheckJob", items: customEvent.detail.items });
 });
 
 // Manual task handlers for testing mode
@@ -351,6 +386,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     await performAddToCart(message.item);
                     return { status: "Add to cart initiated." };
 
+                case "executeScrape":
+                    console.log('🧐 Executing scrape for:', message.item.name);
+                    const products = await parseSearchResults();
+                    // Return only serializable data (remove DOM elements)
+                    const serializableProducts: ScrapedProduct[] = products.map(({ card, ...rest }) => rest);
+                    // Send message back to background script
+                    chrome.runtime.sendMessage({
+                        action: "scrapeCompleted",
+                        products: serializableProducts
+                    });
+                    return { status: "Scrape completed." };
+
                 case "jobFinished":
                     const failedItems = message.failedItems as FailedItem[] || [];
                     if (failedItems.length > 0) {
@@ -363,6 +410,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     }
                     logger.info('Job finished notification shown');
                     return { status: "acknowledged" };
+
+                case "priceCheckFinished":
+                    logger.info('Price check finished, forwarding to Web App');
+                    const event = new CustomEvent('priceCheckResultsToWebApp', {
+                        detail: { results: message.results }
+                    });
+                    window.dispatchEvent(event);
+                    return { status: "forwarded" };
 
                 case "manualTask":
                     let result: string;

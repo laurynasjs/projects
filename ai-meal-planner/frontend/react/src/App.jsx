@@ -7,6 +7,7 @@ import IngredientsCard from './components/IngredientsCard';
 import RecipeCarousel from './components/RecipeCarousel';
 import TabNavigation from './components/TabNavigation';
 import { generateMealPlan, sendToExtension } from './api/client';
+import { deduplicateIngredients } from './utils/ingredientUtils';
 
 export default function App() {
     const [isLoading, setIsLoading] = useState(false);
@@ -44,15 +45,16 @@ export default function App() {
             selectedMeals.includes(idx)
         );
 
-        // Collect all unique ingredients from selected meals
-        const allIngredients = new Set();
+        // Collect all ingredients from selected meals (with duplicates)
+        const allIngredients = [];
         selectedMealObjects.forEach(meal => {
             if (meal.ingredients) {
-                meal.ingredients.forEach(ing => allIngredients.add(ing));
+                allIngredients.push(...meal.ingredients);
             }
         });
 
-        return Array.from(allIngredients);
+        // Deduplicate and sum quantities
+        return deduplicateIngredients(allIngredients);
     };
 
     const handleExportToExtension = (selectedItems) => {

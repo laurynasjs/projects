@@ -31,3 +31,10 @@ export function sendToExtension(items) {
         timestamp: Date.now()
     }));
 }
+
+export function checkPrices(items) {
+    const event = new CustomEvent('priceCheckFromWebApp', {
+        detail: { items }
+    });
+    window.dispatchEvent(event);
+}

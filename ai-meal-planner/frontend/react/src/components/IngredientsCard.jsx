@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Package, Trash2, Plus, Edit2, Check, X } from 'lucide-react';
+import { ShoppingCart, Package, Trash2, Plus, Edit2, Check, X, Search, AlertCircle, ExternalLink } from 'lucide-react';
+import { checkPrices } from '../api/client';
 
 export default function IngredientsCard({ ingredients, onExportToExtension }) {
     const [items, setItems] = useState([]);
@@ -7,6 +8,11 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
+
+    // Price check state
+    const [isCheckingPrices, setIsCheckingPrices] = useState(false);
+    const [priceData, setPriceData] = useState(null);
+    const [showPriceModal, setShowPriceModal] = useState(false);
 
     useEffect(() => {
         setItems(ingredients.map((item, idx) => ({
@@ -16,6 +22,18 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
             quantity: 1
         })));
     }, [ingredients]);
+
+    useEffect(() => {
+        const handlePriceResults = (event) => {
+            console.log("Received price results:", event.detail.results);
+            setPriceData(event.detail.results);
+            setIsCheckingPrices(false);
+            setShowPriceModal(true);
+        };
+
+        window.addEventListener('priceCheckResultsToWebApp', handlePriceResults);
+        return () => window.removeEventListener('priceCheckResultsToWebApp', handlePriceResults);
+    }, []);
 
     if (!ingredients) return null; // Allow empty ingredients list for adding new ones
 
@@ -72,13 +90,29 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
         }
     };
 
-    const handleExport = () => {
-        const selectedItems = items
+    const getSelectedItems = () => {
+        return items
             .filter(item => item.selected)
             .map(item => ({
                 name: item.name,
                 quantity: item.quantity
             }));
+    };
+
+    const handleCheckPrices = () => {
+        const selectedItems = getSelectedItems();
+        if (selectedItems.length === 0) {
+            alert('Please select at least one item');
+            return;
+        }
+
+        setIsCheckingPrices(true);
+        setPriceData(null);
+        checkPrices(selectedItems);
+    };
+
+    const handleExport = () => {
+        const selectedItems = getSelectedItems();
 
         if (selectedItems.length === 0) {
             alert('Please select at least one item');
@@ -86,10 +120,42 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
         }
 
         onExportToExtension(selectedItems);
+        setShowPriceModal(false);
     };
 
+    // Calculate totals from price data
+    const calculateTotals = () => {
+        if (!priceData) return { total: 0, found: 0, missing: 0 };
+
+        let total = 0;
+        let found = 0;
+        let missing = 0;
+
+        priceData.forEach(result => {
+            if (result.products && result.products.length > 0) {
+                // Assume first product is best match for now (sorted by extension)
+                const product = result.products[0];
+                const item = items.find(i => i.name === result.originalName);
+                const quantity = item ? item.quantity : 1;
+
+                if (product.available) {
+                    total += product.price * quantity;
+                    found++;
+                } else {
+                    missing++;
+                }
+            } else {
+                missing++;
+            }
+        });
+
+        return { total, found, missing };
+    };
+
+    const totals = calculateTotals();
+
     return (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative">
             <div className="flex items-center gap-2 mb-4">
                 <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
                     <Package className="h-4 w-4 text-emerald-600" />
@@ -132,7 +198,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                 <button onClick={saveEdit} className="p-1 text-emerald-600 hover:bg-emerald-100 rounded">
                                     <Check className="h-4 w-4" />
                                 </button>
-                                <button onClick={cancelEdit} className="p-1 text-slate-400 hover:bg-slate-100 rounded">
+                                <button onClick={cancelEdit} className="p-1 text-slate-400 hover:bg-slate-200 rounded">
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
@@ -210,14 +276,113 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                 )}
             </div>
 
-            <button
-                onClick={handleExport}
-                disabled={selectedCount === 0}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                <ShoppingCart className="h-4 w-4" />
-                Send {selectedCount > 0 ? `${selectedCount} items` : ''} to Barbora
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+                <button
+                    onClick={handleCheckPrices}
+                    disabled={selectedCount === 0 || isCheckingPrices}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isCheckingPrices ? (
+                        <div className="animate-spin h-4 w-4 border-2 border-slate-500 border-t-transparent rounded-full" />
+                    ) : (
+                        <Search className="h-4 w-4" />
+                    )}
+                    {isCheckingPrices ? 'Checking...' : 'Check Prices'}
+                </button>
+
+                <button
+                    onClick={handleExport}
+                    disabled={selectedCount === 0 || isCheckingPrices}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <ShoppingCart className="h-4 w-4" />
+                    Send to Cart
+                </button>
+            </div>
+
+            {/* Price Check Results Modal */}
+            {showPriceModal && priceData && (
+                <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-10 rounded-2xl flex flex-col p-6 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-lg text-slate-900">Price Estimate</h3>
+                        <button
+                            onClick={() => setShowPriceModal(false)}
+                            className="p-1 hover:bg-slate-100 rounded-full"
+                        >
+                            <X className="h-5 w-5 text-slate-500" />
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                        {/* Summary */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                                <p className="text-xs text-emerald-600 font-medium mb-1">Estimated Total</p>
+                                <p className="text-xl font-bold text-emerald-700">€{totals.total.toFixed(2)}</p>
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <p className="text-xs text-slate-500 font-medium mb-1">Found Items</p>
+                                <p className="text-xl font-bold text-slate-700">
+                                    {totals.found} <span className="text-sm font-normal text-slate-400">/ {selectedCount}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* List */}
+                        {priceData.map((item, idx) => {
+                            const foundProduct = item.products && item.products.length > 0 ? item.products[0] : null;
+                            const originalItem = items.find(i => i.name === item.originalName);
+                            const qty = originalItem ? originalItem.quantity : 1;
+
+                            return (
+                                <div key={idx} className={`p-3 rounded-xl border ${foundProduct ? 'border-slate-200 bg-white' : 'border-red-100 bg-red-50'}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <p className="font-medium text-sm text-slate-900">{item.originalName}</p>
+                                        <span className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">x{qty}</span>
+                                    </div>
+
+                                    {foundProduct ? (
+                                        <div className="flex gap-3">
+                                            {foundProduct.imageUrl ? (
+                                                <img src={foundProduct.imageUrl} alt={foundProduct.name} className="h-12 w-12 object-contain rounded bg-white border border-slate-100" />
+                                            ) : (
+                                                <div className="h-12 w-12 rounded bg-slate-100 flex items-center justify-center">
+                                                    <Package className="h-5 w-5 text-slate-400" />
+                                                </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs text-slate-600 truncate mb-1" title={foundProduct.name}>{foundProduct.name}</p>
+                                                <div className="flex items-baseline gap-2">
+                                                    <span className="font-bold text-emerald-600">€{foundProduct.price.toFixed(2)}</span>
+                                                    <span className="text-[10px] text-slate-400">€{foundProduct.unitPrice}/{foundProduct.unit}</span>
+                                                </div>
+                                                {!foundProduct.available && (
+                                                    <p className="text-[10px] text-red-500 font-medium mt-1">Out of stock</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 text-red-600 text-xs">
+                                            <AlertCircle className="h-3 w-3" />
+                                            <span>Not found or unavailable</span>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                        <button
+                            onClick={handleExport}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl shadow-md transition-all font-medium"
+                        >
+                            <ShoppingCart className="h-4 w-4" />
+                            Add Available Items to Cart
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
