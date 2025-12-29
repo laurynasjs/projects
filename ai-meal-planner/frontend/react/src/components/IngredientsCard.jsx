@@ -9,6 +9,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
     const [selectedStores, setSelectedStores] = useState(['barbora', 'iki']);
+    const [targetCartStore, setTargetCartStore] = useState('barbora'); // Store to send items to cart
 
     // Price check state
     const [isCheckingPrices, setIsCheckingPrices] = useState(false);
@@ -150,8 +151,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
             .filter(item => item.selected)
             .map(item => {
                 // Get the cached selected product for this item and target store
-                const targetStore = selectedStores[0] || 'barbora';
-                const carouselKey = `${item.id}-${targetStore}`;
+                const carouselKey = `${item.id}-${targetCartStore}`;
                 const cachedProduct = selectedProducts[carouselKey];
 
                 return {
@@ -166,8 +166,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
             return;
         }
 
-        const targetStore = selectedStores[0] || 'barbora';
-        onExportToExtension(selectedItems, targetStore);
+        onExportToExtension(selectedItems, targetCartStore);
         setShowPriceModal(false);
     };
 
@@ -637,7 +636,44 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                             </div>
                         )}
 
-                        <div className="mt-4 pt-4 border-t border-slate-100">
+                        <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                            {/* Store selector for cart */}
+                            {priceData.multiStore && (
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-600 mb-2">Add to Cart At:</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {Object.keys(totals || {}).map(storeName => (
+                                            <label
+                                                key={storeName}
+                                                className={`flex items-center gap-2 p-2.5 rounded-lg border-2 cursor-pointer transition-all ${targetCartStore === storeName
+                                                    ? 'border-violet-500 bg-violet-50'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300'
+                                                    }`}
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    name="cartStore"
+                                                    value={storeName}
+                                                    checked={targetCartStore === storeName}
+                                                    onChange={(e) => setTargetCartStore(e.target.value)}
+                                                    className="w-4 h-4 text-violet-600"
+                                                    disabled={storeName !== 'barbora'}
+                                                />
+                                                <span className={`text-sm font-medium ${targetCartStore === storeName ? 'text-violet-700' : 'text-slate-700'}`}>
+                                                    {storeName === 'barbora' && '🛒 Barbora'}
+                                                    {storeName === 'iki' && '🏪 IKI'}
+                                                    {storeName === 'rimi' && '🏬 Rimi'}
+                                                    {storeName === 'maxima' && '🏢 Maxima'}
+                                                </span>
+                                                {storeName !== 'barbora' && (
+                                                    <span className="ml-auto text-[10px] text-slate-400">Soon</span>
+                                                )}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <button
                                 onClick={handleExport}
                                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl shadow-md transition-all font-medium"

@@ -81,10 +81,21 @@ async function startNextShoppingStep(job: ShoppingJob, tabId: number): Promise<v
 
     logger.info(`Starting search for: ${currentItem.name}`);
 
+    // Wait for content script to be ready (with timeout)
+    await waitForContentScriptReady(tabId, 5000);
+
+    // Send search message - don't wait for response as page will navigate
     try {
         const tab = await chrome.tabs.get(tabId);
         if (!tab) throw new Error('Tab no longer exists');
-        await chrome.tabs.sendMessage(tabId, { action: "executeSearch", item: currentItem });
+
+        // Send message without waiting for response (Barbora navigates immediately)
+        chrome.tabs.sendMessage(tabId, { action: "executeSearch", item: currentItem }).catch(() => {
+            // Ignore errors - page navigation is expected for Barbora
+            logger.debug('Search message sent, page navigating (expected for Barbora)');
+        });
+
+        logger.info('✅ Search message sent successfully');
     } catch (error) {
         logger.error('Failed to send search message', error);
         job.failedItems.push({ name: currentItem.name, reason: 'Failed to communicate with tab' });
