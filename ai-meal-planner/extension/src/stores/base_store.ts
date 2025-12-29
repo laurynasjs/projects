@@ -9,6 +9,7 @@ export interface Product {
     unit: string;
     url: string;
     available: boolean;
+    imageUrl?: string;
     element?: Element;
 }
 
@@ -29,7 +30,7 @@ export interface StoreConfig {
 }
 
 export abstract class BaseStore {
-    protected config: StoreConfig;
+    public config: StoreConfig;
     protected logger: ReturnType<typeof createLogger>;
 
     constructor(config: StoreConfig) {
@@ -45,15 +46,10 @@ export abstract class BaseStore {
         return this.config.url;
     }
 
-    /**
-     * Search for a product by name
-     */
-    abstract searchProduct(query: string): Promise<void>;
-
-    /**
-     * Get all products from current page
-     */
+    // Abstract methods that each store must implement
+    abstract search(searchTerm: string): Promise<void>;
     abstract getProducts(): Promise<Product[]>;
+    abstract addToCart(product: Product, quantity: number): Promise<void>;
 
     /**
      * Get the best value product (lowest unit price)
@@ -73,11 +69,6 @@ export abstract class BaseStore {
 
         return bestProduct;
     }
-
-    /**
-     * Add product to cart
-     */
-    abstract addToCart(product: Product, quantity: number): Promise<void>;
 
     /**
      * Check if we're currently on this store's website

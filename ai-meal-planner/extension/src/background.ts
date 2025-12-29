@@ -2,6 +2,7 @@
 import { Job, ShoppingJob, PriceCheckJob, ShoppingListItem, FailedItem, PriceCheckItemResult, ScrapedProduct } from './shared/types';
 import { CONFIG } from './shared/constants';
 import { createLogger } from './shared/logger';
+import { StoreFactory, StoreName } from './stores';
 
 const logger = createLogger('BG');
 
@@ -59,22 +60,23 @@ async function startNextShoppingStep(job: ShoppingJob, tabId: number): Promise<v
     }
 }
 
-async function handleStartShoppingJob(items: ShoppingListItem[]): Promise<{ status: string; message?: string }> {
+async function handleStartShoppingJob(items: ShoppingListItem[], storeName: StoreName = 'barbora'): Promise<{ status: string; message?: string }> {
     try {
-        logger.info(`Starting shopping job with ${items.length} items`);
-        const barboraTab = await chrome.tabs.create({ url: CONFIG.BARBORA_URL, active: true });
+        logger.info(`Starting shopping job with ${items.length} items on ${storeName}`);
+        const store = StoreFactory.getStore(storeName);
+        const storeTab = await chrome.tabs.create({ url: store.config.url, active: true });
 
-        if (!barboraTab.id) throw new Error("Failed to create a new tab for the job.");
+        if (!storeTab.id) throw new Error("Failed to create a new tab for the job.");
 
         const newJob: ShoppingJob = {
             type: 'shopping',
             items,
             failedItems: [],
             currentIndex: 0,
-            statusMessage: "Navigating to Barbora...",
+            statusMessage: `Navigating to ${store.config.name}...`,
             isRunning: true,
             status: 'idle',
-            targetTabId: barboraTab.id,
+            targetTabId: storeTab.id,
             retryCount: 0,
         };
         await updateJob(newJob);
@@ -140,24 +142,25 @@ async function startNextPriceCheckStep(job: PriceCheckJob, tabId: number): Promi
     }
 }
 
-async function handleStartPriceCheckJob(items: ShoppingListItem[], sourceTabId?: number): Promise<{ status: string; message?: string }> {
+async function handleStartPriceCheckJob(items: ShoppingListItem[], sourceTabId: number, storeName: StoreName = 'barbora'): Promise<{ status: string; message?: string }> {
     try {
-        logger.info(`Starting price check job with ${items.length} items from tab ${sourceTabId}`);
+        logger.info(`Starting price check job with ${items.length} items from tab ${sourceTabId} on ${storeName}`);
 
-        // Open Barbora tab in background if possible, or just new tab
-        const barboraTab = await chrome.tabs.create({ url: CONFIG.BARBORA_URL, active: false });
+        // Open store tab in background if possible, or just new tab
+        const store = StoreFactory.getStore(storeName);
+        const storeTab = await chrome.tabs.create({ url: store.config.url, active: false });
 
-        if (!barboraTab.id) throw new Error("Failed to create a new tab for the price check.");
+        if (!storeTab.id) throw new Error("Failed to create a new tab for the price check.");
 
         const newJob: PriceCheckJob = {
             type: 'priceCheck',
             items,
             results: [],
             currentIndex: 0,
-            statusMessage: "Navigating to Barbora for price check...",
+            statusMessage: `Navigating to ${store.config.name} for price check...`,
             isRunning: true,
             status: 'idle',
-            targetTabId: barboraTab.id,
+            targetTabId: storeTab.id,
             sourceTabId: sourceTabId
         };
         await updateJob(newJob);
@@ -216,11 +219,12 @@ async function handleTaskCompleted(status: 'success' | 'notFound', reason?: stri
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "startShoppingJob") {
-        handleStartShoppingJob(message.items).then(sendResponse);
+        handleStartShoppingJob(message.items, message.store || 'barbora').then(sendResponse);
         return true;
     }
     else if (message.action === "startPriceCheckJob") {
-        handleStartPriceCheckJob(message.items, sender.tab?.id).then(sendResponse);
+        const sourceTabId = sender.tab?.id || 0;
+        handleStartPriceCheckJob(message.items, sourceTabId, message.store || 'barbora').then(sendResponse);
         return true;
     }
     else if (message.action === "taskCompleted") {
@@ -235,19 +239,80 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return true;
     }
+    else if (message.action === "searchCompleted") {
+        // Handle search completion for SPA stores (like IKI) that don't trigger page reload
+        logger.info('Received searchCompleted notification from content script');
+        getJob().then(async (job) => {
+            if (job && job.isRunning && job.status === 'searching') {
+                const tabId = sender.tab?.id;
+                if (tabId) {
+                    logger.info('Search completed, triggering scrape...');
+                    if (job.type === 'priceCheck') {
+                        job.status = 'scraping';
+                        const currentItem = job.items[job.currentIndex];
+                        job.statusMessage = `Scraping prices for "${currentItem.name}"...`;
+                        await updateJob(job);
+                        try {
+                            await chrome.tabs.sendMessage(tabId, { action: 'executeScrape', item: currentItem });
+                        } catch (error) {
+                            logger.error('Failed to send scrape message', error);
+                            job.results.push({
+                                originalName: currentItem.name,
+                                products: [],
+                                error: 'Failed to communicate with tab'
+                            });
+                            job.currentIndex++;
+                            await startNextPriceCheckStep(job, tabId);
+                        }
+                    } else if (job.type === 'shopping') {
+                        job.status = 'addingToCart';
+                        const currentItem = job.items[job.currentIndex];
+                        job.statusMessage = `Adding "${currentItem.name}" to cart...`;
+                        await updateJob(job);
+                        try {
+                            await chrome.tabs.sendMessage(tabId, { action: 'executeAddToCart', item: currentItem });
+                        } catch (error) {
+                            logger.error('Failed to send add to cart message', error);
+                            job.failedItems.push({ name: currentItem.name, reason: 'Failed to communicate with tab' });
+                            job.currentIndex++;
+                            await startNextShoppingStep(job, tabId);
+                        }
+                    }
+                }
+            }
+            sendResponse({ status: "acknowledged" });
+        });
+        return true;
+    }
     return false;
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-    if (changeInfo.status !== 'complete' || !tab.url?.includes('barbora.lt')) {
+    // Log all tab updates for debugging
+    const job = await getJob();
+    if (job?.isRunning && job.targetTabId === tabId) {
+        logger.debug(`Tab ${tabId} update: status=${changeInfo.status}, url=${tab.url}, jobStatus=${job.status}`);
+    }
+
+    if (changeInfo.status !== 'complete') {
         return;
     }
 
-    const job = await getJob();
+    // Check if this is a supported store domain
+    const isSupportedStore = tab.url?.includes('barbora.lt') ||
+        tab.url?.includes('lastmile.lt') ||
+        tab.url?.includes('rimi.lt') ||
+        tab.url?.includes('maxima.lt');
+
+    if (!isSupportedStore) {
+        return;
+    }
 
     if (job?.isRunning && job.targetTabId === tabId) {
+        logger.info(`Tab ${tabId} completed loading. Job status: ${job.status}, URL: ${tab.url}`);
+
         if (job.status === 'idle') {
-            logger.info(`Target tab ${tabId} loaded. Starting first step.`);
+            logger.info(`Target tab ${tabId} loaded (${tab.url}). Starting first step.`);
             if (job.type === 'shopping') {
                 await startNextShoppingStep(job, tabId);
             } else if (job.type === 'priceCheck') {
@@ -256,7 +321,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         }
         else if (job.status === 'searching') {
             // Page reloaded after search
-            logger.info(`Target tab ${tabId} reloaded after search.`);
+            logger.info(`Target tab ${tabId} reloaded after search (${tab.url}).`);
 
             if (job.type === 'shopping') {
                 job.status = 'addingToCart';

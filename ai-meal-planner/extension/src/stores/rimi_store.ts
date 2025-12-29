@@ -17,7 +17,7 @@ export class RimiStore extends BaseStore {
         super(RIMI_CONFIG);
     }
 
-    async searchProduct(query: string): Promise<void> {
+    async search(query: string): Promise<void> {
         this.logger.info(`Searching for: "${query}"`);
 
         // Navigate to search if not already there

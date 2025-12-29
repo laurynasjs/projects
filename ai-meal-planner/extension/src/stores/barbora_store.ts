@@ -18,7 +18,7 @@ export class BarboraStore extends BaseStore {
         super(BARBORA_CONFIG);
     }
 
-    async searchProduct(query: string): Promise<void> {
+    async search(query: string): Promise<void> {
         this.logger.info(`Searching for: "${query}"`);
 
         const searchInput = (await this.waitForElement(

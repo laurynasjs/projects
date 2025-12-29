@@ -6,9 +6,18 @@ import { CONFIG } from './shared/constants';
 import { createLogger } from './shared/logger';
 import { BarboraDOM } from './content/dom-helpers';
 import { parseIngredient, parsePackageSize, calculatePackagesNeeded } from './shared/ingredient-parser';
+import { StoreFactory, BaseStore } from './stores';
 
 const logger = createLogger('CS');
 console.log('🟢 Content script imports loaded, logger created');
+
+// Detect current store
+const currentStore = StoreFactory.getCurrentStore();
+if (currentStore) {
+    logger.info(`🏪 Detected store: ${currentStore.config.name}`);
+} else {
+    logger.warn('⚠️ Could not detect store - extension may not work properly');
+}
 
 // Internal interface for DOM operations
 interface ParsedProduct extends ScrapedProduct {
@@ -163,93 +172,20 @@ async function parseSearchResults(): Promise<ParsedProduct[]> {
     logger.info('Parsing search results...');
 
     try {
-        await BarboraDOM.waitForElement(CONFIG.SELECTORS.PRODUCT_CARD);
-        await new Promise(resolve => setTimeout(resolve, 300)); // Wait for content to render
-
-        const cards = document.querySelectorAll(CONFIG.SELECTORS.PRODUCT_CARD);
-        const products: ParsedProduct[] = [];
-
-        logger.info(`Found ${cards.length} product cards`);
-
-        for (const card of cards) {
-            try {
-                // NO SHADOW DOM - query directly in card
-                const productDiv = card.querySelector(CONFIG.SELECTORS.SHADOW_HOST);
-                if (!productDiv) {
-                    logger.warn('Product div not found');
-                    continue;
-                }
-
-                // DEBUG: Log first card HTML to see structure
-                if (products.length === 0) {
-                    logger.info('First product HTML (1000 chars):', productDiv.innerHTML.substring(0, 1000));
-                }
-
-                // Extract product name from link
-                const linkElement = productDiv.querySelector('a[href*="/produktai/"]');
-                const imgElement = productDiv.querySelector('img[alt]');
-                const name = imgElement?.getAttribute('alt') || linkElement?.textContent?.trim() || 'Unknown';
-                const imageUrl = imgElement?.getAttribute('src') || undefined;
-                const url = linkElement?.getAttribute('href') || undefined;
-
-                // Extract price from meta tag (most reliable)
-                const priceMeta = productDiv.querySelector('meta[itemprop="price"]');
-                let price = 0;
-                if (priceMeta) {
-                    const priceContent = priceMeta.getAttribute('content');
-                    if (priceContent) {
-                        price = parseFloat(priceContent);
-                    }
-                }
-
-                // Extract unit price from text content
-                const allText = productDiv.textContent || '';
-                let unitPrice = 0;
-                let unit = 'vnt';
-
-                // Find unit price like "2,1€/l" or "2.1 €/kg"
-                const unitPriceMatch = allText.match(/(\d+[,.]?\d*)\s*€\/(\w+)/);
-                if (unitPriceMatch) {
-                    unitPrice = parseFloat(unitPriceMatch[1].replace(',', '.'));
-                    unit = unitPriceMatch[2];
-                }
-
-                // If no unit price, use main price
-                if (unitPrice === 0) {
-                    unitPrice = price;
-                }
-
-                // Check availability - look for "Add to Cart" button
-                const buttons = productDiv.querySelectorAll('button');
-                let available = false;
-                for (const button of buttons) {
-                    if (button.textContent?.includes(CONFIG.SELECTORS.ADD_TO_CART_TEXT)) {
-                        available = true;
-                        break;
-                    }
-                }
-
-                if (price > 0) {
-                    products.push({
-                        name,
-                        price,
-                        unitPrice,
-                        unit,
-                        imageUrl,
-                        url,
-                        available,
-                        card: card // Keep DOM element for internal use
-                    });
-
-                    logger.debug(`✅ Parsed: ${name} - €${price} (€${unitPrice}/${unit}) - ${available ? 'Available' : 'Out of stock'}`);
-                }
-
-            } catch (error) {
-                logger.warn('Failed to parse product card', error);
-            }
+        if (!currentStore) {
+            throw new Error('No store detected - cannot parse products');
         }
 
-        logger.info(`✅ Parsed ${products.length} products from search results`);
+        // Use store-specific getProducts method
+        const storeProducts = await currentStore.getProducts();
+        logger.info(`✅ Store returned ${storeProducts.length} products`);
+
+        // Convert to ParsedProduct format (add card element)
+        const products: ParsedProduct[] = storeProducts.map(product => ({
+            ...product,
+            card: product.element || document.createElement('div') // Fallback if no element
+        }));
+
         return products;
 
     } catch (error) {
@@ -262,28 +198,30 @@ async function executeSearch(item: ShoppingListItem): Promise<void> {
     logger.info(`Executing search for: "${item.name}"`);
 
     try {
+        if (!currentStore) {
+            throw new Error('No store detected - cannot perform search');
+        }
+
         // Parse ingredient to extract just the name (without quantity)
         const parsed = parseIngredient(item.name);
         const searchTerm = parsed.name;
 
         logger.info(`🔍 Searching for ingredient name only: "${searchTerm}" (needed: ${parsed.neededAmount}${parsed.unit})`);
 
-        const searchInput = await BarboraDOM.waitForElement(CONFIG.SELECTORS.SEARCH_INPUT) as HTMLInputElement;
-        searchInput.value = searchTerm;
-        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        // Use store-specific search method
+        await currentStore.search(searchTerm);
+        logger.info('✅ Search initiated via store method');
 
-        const randomDelay = CONFIG.TIMEOUTS.SEARCH_DELAY_MIN +
-            Math.random() * (CONFIG.TIMEOUTS.SEARCH_DELAY_MAX - CONFIG.TIMEOUTS.SEARCH_DELAY_MIN);
-        logger.debug(`Waiting ${Math.round(randomDelay)}ms before clicking search`);
-        await new Promise(resolve => setTimeout(resolve, randomDelay));
+        // For SPA stores (like IKI), wait for products to load and notify background
+        // that search is complete so it can proceed to scraping
+        logger.info('⏳ Waiting for search results to load...');
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for results to load (avoid triggering anti-bot)
 
-        const searchButton = document.querySelector(CONFIG.SELECTORS.SEARCH_BUTTON) as HTMLElement;
-        if (!searchButton) {
-            throw new Error(`Could not find search button: ${CONFIG.SELECTORS.SEARCH_BUTTON}`);
-        }
-
-        searchButton.click();
-        logger.info('✅ Search button clicked - page will reload with results');
+        // Notify background that search is complete and page is ready for scraping
+        chrome.runtime.sendMessage({
+            action: 'searchCompleted'
+        });
+        logger.info('✅ Notified background that search results are ready');
 
     } catch (error) {
         logger.error('Failed to execute search', error);
@@ -294,13 +232,21 @@ async function executeSearch(item: ShoppingListItem): Promise<void> {
 window.addEventListener('shoppingListFromWebApp', (event: Event) => {
     const customEvent = event as CustomEvent;
     logger.info('Received shopping list from Web App', customEvent.detail);
-    chrome.runtime.sendMessage({ action: "startShoppingJob", items: customEvent.detail.items });
+    chrome.runtime.sendMessage({
+        action: "startShoppingJob",
+        items: customEvent.detail.items,
+        store: customEvent.detail.store || 'barbora'
+    });
 });
 
 window.addEventListener('priceCheckFromWebApp', (event: Event) => {
     const customEvent = event as CustomEvent;
     logger.info('Received price check request from Web App', customEvent.detail);
-    chrome.runtime.sendMessage({ action: "startPriceCheckJob", items: customEvent.detail.items });
+    chrome.runtime.sendMessage({
+        action: "startPriceCheckJob",
+        items: customEvent.detail.items,
+        store: customEvent.detail.store || 'barbora'
+    });
 });
 
 // Manual task handlers for testing mode
@@ -462,7 +408,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 logger.info('Content script loaded and ready');
-console.log('🚀 BARBORA EXTENSION LOADED - Content script is active!');
+console.log('🚀 SHOPPING EXTENSION LOADED - Content script is active!');
 
 // Alert on first load to confirm extension is working
 if (window.location.href.includes('barbora.lt')) {

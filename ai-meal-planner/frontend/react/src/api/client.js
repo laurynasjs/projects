@@ -18,23 +18,24 @@ export async function generateMealPlan(preferences, days = null) {
     return response.json();
 }
 
-export function sendToExtension(items) {
+export function sendToExtension(items, store = 'barbora') {
     // Dispatch custom event for Chrome extension
     const event = new CustomEvent('shoppingListFromWebApp', {
-        detail: { items }
+        detail: { items, store }
     });
     window.dispatchEvent(event);
 
     // Also store in localStorage for extension to pick up
     localStorage.setItem('mealPlannerCart', JSON.stringify({
         items,
+        store,
         timestamp: Date.now()
     }));
 }
 
-export function checkPrices(items) {
+export function checkPrices(items, store = 'barbora') {
     const event = new CustomEvent('priceCheckFromWebApp', {
-        detail: { items }
+        detail: { items, store }
     });
     window.dispatchEvent(event);
 }

@@ -1,8 +1,10 @@
 // src/popup.ts
 import { ShoppingListItem } from './shared/types';
 import { createLogger } from './shared/logger';
+import { StoreName } from './stores';
 
 const logger = createLogger('POPUP');
+const STORE_PREFERENCE_KEY = 'selectedStore';
 
 type ManualTask = 'increase' | 'decrease' | 'remove';
 
@@ -65,10 +67,20 @@ function sendManualTask(task: ManualTask): void {
 }
 
 function updateStatus(message: string): void {
-    const statusContainer = document.getElementById('status-container');
-    if (statusContainer) {
-        statusContainer.textContent = message;
+    const statusDiv = document.getElementById('status-container');
+    if (statusDiv) {
+        statusDiv.textContent = message;
     }
+}
+
+async function getSelectedStore(): Promise<StoreName> {
+    const result = await chrome.storage.local.get(STORE_PREFERENCE_KEY);
+    return (result[STORE_PREFERENCE_KEY] as StoreName) || 'barbora';
+}
+
+async function saveSelectedStore(store: StoreName): Promise<void> {
+    await chrome.storage.local.set({ [STORE_PREFERENCE_KEY]: store });
+    logger.info(`Saved store preference: ${store}`);
 }
 
 function parseQuickSearchInput(input: string): { name: string; quantity: number } {
@@ -88,25 +100,41 @@ function parseQuickSearchInput(input: string): { name: string; quantity: number 
     return { name: input.trim(), quantity: 1 };
 }
 
-function sendQuickSearch(item: string): void {
+async function sendQuickSearch(item: string): Promise<void> {
     const parsed = parseQuickSearchInput(item);
-    updateStatus(`Searching for "${parsed.name}" (qty: ${parsed.quantity})...`);
+    const store = await getSelectedStore();
+    updateStatus(`Searching for "${parsed.name}" (qty: ${parsed.quantity}) on ${store}...`);
 
     chrome.runtime.sendMessage({
         action: "startShoppingJob",
-        items: [{ name: parsed.name, quantity: parsed.quantity }]
+        items: [{ name: parsed.name, quantity: parsed.quantity }],
+        store: store
     }, (response) => {
         if (chrome.runtime.lastError) {
             logger.error('Error sending quick search', chrome.runtime.lastError);
             updateStatus('Error: Could not start search');
         } else {
-            logger.info(`Quick search initiated: ${parsed.name} x${parsed.quantity}`);
+            logger.info(`Quick search initiated: ${parsed.name} x${parsed.quantity} on ${store}`);
             window.close();
         }
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Store selector
+    const storeSelector = document.getElementById('storeSelector') as HTMLSelectElement;
+
+    // Load saved store preference
+    const savedStore = await getSelectedStore();
+    storeSelector.value = savedStore;
+
+    // Save store preference when changed
+    storeSelector.addEventListener('change', async () => {
+        const selectedStore = storeSelector.value as StoreName;
+        await saveSelectedStore(selectedStore);
+        updateStatus(`Store changed to ${selectedStore}`);
+    });
+
     // Quick search
     const searchInput = document.getElementById('searchInput') as HTMLInputElement;
     const searchAndAddBtn = document.getElementById('searchAndAddBtn');
@@ -147,18 +175,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             logger.info(`Starting shopping job with ${items.length} items`);
 
-            const response = await chrome.runtime.sendMessage({
-                action: "startShoppingJob",
-                items: items
-            });
+            const store = await getSelectedStore();
+            updateStatus(`Processing ${items.length} items on ${store}...`);
 
-            if (response.status === 'success') {
-                logger.info('Job started successfully');
-                window.close();
-            } else {
-                logger.error('Failed to start job', response);
-                alert(`Failed to start shopping job: ${response.message || 'Unknown error'}`);
-            }
+            chrome.runtime.sendMessage({
+                action: "startShoppingJob",
+                items,
+                store: store
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    logger.error('Error sending bulk shopping list', chrome.runtime.lastError);
+                    updateStatus('Error: Could not start shopping job');
+                } else {
+                    if (response.status === 'success') {
+                        logger.info('Job started successfully');
+                        window.close();
+                    } else {
+                        logger.error('Failed to start job', response);
+                        alert(`Failed to start shopping job: ${response.message || 'Unknown error'}`);
+                    }
+                }
+            });
         } catch (error) {
             logger.error('Error processing shopping list', error);
             alert('An error occurred. Please try again.');

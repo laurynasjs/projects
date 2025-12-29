@@ -2,10 +2,11 @@ import { BaseStore } from './base_store';
 import { BarboraStore } from './barbora_store';
 import { RimiStore } from './rimi_store';
 import { MaximaStore } from './maxima_store';
+import { IKIStore } from './iki_store';
 
-export { BaseStore, BarboraStore, RimiStore, MaximaStore };
+export { BaseStore, BarboraStore, RimiStore, MaximaStore, IKIStore };
 
-export type StoreName = 'barbora' | 'rimi' | 'maxima';
+export type StoreName = 'barbora' | 'rimi' | 'maxima' | 'iki';
 
 export class StoreFactory {
     private static stores: Map<StoreName, BaseStore> = new Map();
@@ -22,6 +23,9 @@ export class StoreFactory {
                 case 'maxima':
                     this.stores.set(storeName, new MaximaStore());
                     break;
+                case 'iki':
+                    this.stores.set(storeName, new IKIStore());
+                    break;
                 default:
                     throw new Error(`Unknown store: ${storeName}`);
             }
@@ -34,6 +38,7 @@ export class StoreFactory {
             this.getStore('barbora'),
             this.getStore('rimi'),
             this.getStore('maxima'),
+            this.getStore('iki'),
         ];
     }
 
@@ -46,6 +51,8 @@ export class StoreFactory {
             return this.getStore('rimi');
         } else if (url.includes('maxima.lt')) {
             return this.getStore('maxima');
+        } else if (url.includes('lastmile.lt/chain/IKI')) {
+            return this.getStore('iki');
         }
 
         return null;

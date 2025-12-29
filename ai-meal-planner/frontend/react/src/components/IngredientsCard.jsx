@@ -8,6 +8,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
+    const [selectedStore, setSelectedStore] = useState('barbora');
 
     // Price check state
     const [isCheckingPrices, setIsCheckingPrices] = useState(false);
@@ -108,7 +109,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
 
         setIsCheckingPrices(true);
         setPriceData(null);
-        checkPrices(selectedItems);
+        checkPrices(selectedItems, selectedStore);
     };
 
     const handleExport = () => {
@@ -119,7 +120,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
             return;
         }
 
-        onExportToExtension(selectedItems);
+        onExportToExtension(selectedItems, selectedStore);
         setShowPriceModal(false);
     };
 
@@ -274,6 +275,20 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                         Add Ingredient
                     </button>
                 )}
+            </div>
+
+            <div className="mb-3">
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">Select Store</label>
+                <select
+                    value={selectedStore}
+                    onChange={(e) => setSelectedStore(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                >
+                    <option value="barbora">🛒 Barbora</option>
+                    <option value="iki">🏪 IKI (LastMile)</option>
+                    <option value="rimi">🏬 Rimi</option>
+                    <option value="maxima">🏢 Maxima</option>
+                </select>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
