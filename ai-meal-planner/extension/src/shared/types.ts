@@ -1,6 +1,17 @@
 export type ShoppingListItem = {
     name: string;
     quantity: number;
+    cachedProduct?: {
+        name: string;
+        price: number;
+        unitPrice: number;
+        unit: string;
+        url: string;
+        available: boolean;
+        imageUrl?: string;
+        matchScore?: number;
+        matchReason?: string;
+    };
 };
 
 export type FailedItem = {
@@ -13,9 +24,11 @@ export type ScrapedProduct = {
     price: number;
     unitPrice: number;
     unit: string;
-    imageUrl?: string;
+    url: string;
     available: boolean;
-    url?: string;
+    imageUrl?: string;
+    matchScore?: number;
+    matchReason?: string;
 };
 
 export type PriceCheckItemResult = {
@@ -46,6 +59,8 @@ export type PriceCheckJob = {
     status: 'searching' | 'scraping' | 'idle';
     targetTabId?: number;
     sourceTabId?: number; // The Web App tab requesting the check
+    multiStoreMode?: boolean;
+    currentStoreName?: string;
 };
 
 export type Job = ShoppingJob | PriceCheckJob;

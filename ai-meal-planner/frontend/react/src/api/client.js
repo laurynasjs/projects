@@ -33,9 +33,12 @@ export function sendToExtension(items, store = 'barbora') {
     }));
 }
 
-export function checkPrices(items, store = 'barbora') {
+export function checkPrices(items, stores = ['barbora']) {
+    // If stores is a string (backward compatibility), convert to array
+    const storeArray = Array.isArray(stores) ? stores : [stores];
+
     const event = new CustomEvent('priceCheckFromWebApp', {
-        detail: { items, store }
+        detail: { items, stores: storeArray }
     });
     window.dispatchEvent(event);
 }

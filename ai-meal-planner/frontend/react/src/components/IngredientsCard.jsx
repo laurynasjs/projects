@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Package, Trash2, Plus, Edit2, Check, X, Search, AlertCircle, ExternalLink } from 'lucide-react';
+import { ShoppingCart, Package, Trash2, Plus, Edit2, Check, X, Search, AlertCircle, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 import { checkPrices } from '../api/client';
 
 export default function IngredientsCard({ ingredients, onExportToExtension }) {
@@ -8,12 +8,14 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
-    const [selectedStore, setSelectedStore] = useState('barbora');
+    const [selectedStores, setSelectedStores] = useState(['barbora', 'iki']);
 
     // Price check state
     const [isCheckingPrices, setIsCheckingPrices] = useState(false);
     const [priceData, setPriceData] = useState(null);
     const [showPriceModal, setShowPriceModal] = useState(false);
+    const [selectedProductIndices, setSelectedProductIndices] = useState({}); // Track selected product index per ingredient per store
+    const [selectedProducts, setSelectedProducts] = useState({}); // Cache actual selected product data: { "itemId-storeName": productData }
 
     useEffect(() => {
         setItems(ingredients.map((item, idx) => ({
@@ -26,15 +28,41 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
 
     useEffect(() => {
         const handlePriceResults = (event) => {
-            console.log("Received price results:", event.detail.results);
-            setPriceData(event.detail.results);
+            console.log("Received price results:", event.detail);
             setIsCheckingPrices(false);
+
+            // Detect if multi-store format (results is object with store names as keys)
+            const isMultiStore = event.detail.results && typeof event.detail.results === 'object' && !Array.isArray(event.detail.results);
+
+            setPriceData({
+                results: event.detail.results,
+                multiStore: isMultiStore
+            });
             setShowPriceModal(true);
+
+            // Initialize selectedProducts cache with first product of each ingredient/store
+            const initialSelections = {};
+            if (event.detail?.results) {
+                if (isMultiStore) {
+                    Object.entries(event.detail.results).forEach(([storeName, results]) => {
+                        results.forEach(result => {
+                            if (result.products && result.products.length > 0) {
+                                const itemId = items.find(item => item.name === result.originalName)?.id;
+                                if (itemId !== undefined) {
+                                    const carouselKey = `${itemId}-${storeName}`;
+                                    initialSelections[carouselKey] = result.products[0];
+                                }
+                            }
+                        });
+                    });
+                }
+            }
+            setSelectedProducts(initialSelections);
         };
 
         window.addEventListener('priceCheckResultsToWebApp', handlePriceResults);
         return () => window.removeEventListener('priceCheckResultsToWebApp', handlePriceResults);
-    }, []);
+    }, [items]);
 
     if (!ingredients) return null; // Allow empty ingredients list for adding new ones
 
@@ -107,50 +135,98 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
             return;
         }
 
+        if (selectedStores.length === 0) {
+            alert('Please select at least one store');
+            return;
+        }
+
         setIsCheckingPrices(true);
         setPriceData(null);
-        checkPrices(selectedItems, selectedStore);
+        checkPrices(selectedItems, selectedStores);
     };
 
     const handleExport = () => {
-        const selectedItems = getSelectedItems();
+        const selectedItems = items
+            .filter(item => item.selected)
+            .map(item => {
+                // Get the cached selected product for this item and target store
+                const targetStore = selectedStores[0] || 'barbora';
+                const carouselKey = `${item.id}-${targetStore}`;
+                const cachedProduct = selectedProducts[carouselKey];
+
+                return {
+                    name: item.name,
+                    quantity: item.quantity,
+                    cachedProduct: cachedProduct // Include the exact product user selected from carousel
+                };
+            });
 
         if (selectedItems.length === 0) {
             alert('Please select at least one item');
             return;
         }
 
-        onExportToExtension(selectedItems, selectedStore);
+        const targetStore = selectedStores[0] || 'barbora';
+        onExportToExtension(selectedItems, targetStore);
         setShowPriceModal(false);
     };
 
     // Calculate totals from price data
     const calculateTotals = () => {
-        if (!priceData) return { total: 0, found: 0, missing: 0 };
+        if (!priceData) return null;
 
-        let total = 0;
-        let found = 0;
-        let missing = 0;
+        if (priceData.multiStore) {
+            // Multi-store format: { barbora: [...], iki: [...] }
+            const storeTotals = {};
+            Object.entries(priceData.results).forEach(([storeName, results]) => {
+                let total = 0;
+                let found = 0;
+                let missing = 0;
 
-        priceData.forEach(result => {
-            if (result.products && result.products.length > 0) {
-                // Assume first product is best match for now (sorted by extension)
-                const product = result.products[0];
-                const item = items.find(i => i.name === result.originalName);
-                const quantity = item ? item.quantity : 1;
+                results.forEach(result => {
+                    if (result.products && result.products.length > 0) {
+                        const product = result.products[0];
+                        const item = items.find(i => i.name === result.originalName);
+                        const quantity = item ? item.quantity : 1;
+                        if (product.available) {
+                            total += product.price * quantity;
+                            found++;
+                        } else {
+                            missing++;
+                        }
+                    } else {
+                        missing++;
+                    }
+                });
 
-                if (product.available) {
-                    total += product.price * quantity;
-                    found++;
+                storeTotals[storeName] = { total, found, missing };
+            });
+            return storeTotals;
+        } else {
+            // Single store format
+            let total = 0;
+            let found = 0;
+            let missing = 0;
+
+            const results = Array.isArray(priceData.results) ? priceData.results : priceData;
+            results.forEach(result => {
+                if (result.products && result.products.length > 0) {
+                    const product = result.products[0];
+                    const item = items.find(i => i.name === result.originalName);
+                    const quantity = item ? item.quantity : 1;
+                    if (product.available) {
+                        total += product.price * quantity;
+                        found++;
+                    } else {
+                        missing++;
+                    }
                 } else {
                     missing++;
                 }
-            } else {
-                missing++;
-            }
-        });
+            });
 
-        return { total, found, missing };
+            return { single: { total, found, missing } };
+        }
     };
 
     const totals = calculateTotals();
@@ -278,17 +354,31 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
             </div>
 
             <div className="mb-3">
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">Select Store</label>
-                <select
-                    value={selectedStore}
-                    onChange={(e) => setSelectedStore(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                >
-                    <option value="barbora">🛒 Barbora</option>
-                    <option value="iki">🏪 IKI (LastMile)</option>
-                    <option value="rimi">🏬 Rimi</option>
-                    <option value="maxima">🏢 Maxima</option>
-                </select>
+                <label className="block text-xs font-medium text-slate-600 mb-2">Compare Prices At:</label>
+                <div className="grid grid-cols-2 gap-2">
+                    {[
+                        { id: 'barbora', label: '🛒 Barbora' },
+                        { id: 'iki', label: '🏪 IKI' },
+                        { id: 'rimi', label: '🏬 Rimi' },
+                        { id: 'maxima', label: '🏢 Maxima' }
+                    ].map(store => (
+                        <label key={store.id} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={selectedStores.includes(store.id)}
+                                onChange={(e) => {
+                                    if (e.target.checked) {
+                                        setSelectedStores([...selectedStores, store.id]);
+                                    } else {
+                                        setSelectedStores(selectedStores.filter(s => s !== store.id));
+                                    }
+                                }}
+                                className="w-4 h-4 text-emerald-600 rounded focus:ring-2 focus:ring-emerald-500"
+                            />
+                            <span className="text-sm text-slate-700">{store.label}</span>
+                        </label>
+                    ))}
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -328,73 +418,234 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                        {/* Summary */}
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                                <p className="text-xs text-emerald-600 font-medium mb-1">Estimated Total</p>
-                                <p className="text-xl font-bold text-emerald-700">€{totals.total.toFixed(2)}</p>
-                            </div>
-                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                <p className="text-xs text-slate-500 font-medium mb-1">Found Items</p>
-                                <p className="text-xl font-bold text-slate-700">
-                                    {totals.found} <span className="text-sm font-normal text-slate-400">/ {selectedCount}</span>
-                                </p>
-                            </div>
-                        </div>
+                    <div className="flex-1 overflow-y-auto pr-2">
+                        {priceData.multiStore && totals ? (
+                            /* Multi-store comparison view */
+                            <div className="space-y-4">
+                                {/* Store comparison header */}
+                                <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Object.keys(totals).length}, 1fr)` }}>
+                                    {Object.entries(totals).map(([storeName, storeTotal]) => (
+                                        <div key={storeName} className="bg-gradient-to-br from-emerald-50 to-teal-50 p-4 rounded-xl border border-emerald-200">
+                                            <p className="text-xs font-semibold text-emerald-700 uppercase mb-2">
+                                                {storeName === 'barbora' && '🛒 Barbora'}
+                                                {storeName === 'iki' && '🏪 IKI'}
+                                                {storeName === 'rimi' && '🏬 Rimi'}
+                                                {storeName === 'maxima' && '🏢 Maxima'}
+                                            </p>
+                                            <p className="text-2xl font-bold text-emerald-700 mb-1">€{storeTotal.total.toFixed(2)}</p>
+                                            <p className="text-xs text-slate-600">{storeTotal.found} / {selectedCount} items</p>
+                                        </div>
+                                    ))}
+                                </div>
 
-                        {/* List */}
-                        {priceData.map((item, idx) => {
-                            const foundProduct = item.products && item.products.length > 0 ? item.products[0] : null;
-                            const originalItem = items.find(i => i.name === item.originalName);
-                            const qty = originalItem ? originalItem.quantity : 1;
+                                {/* Item comparison */}
+                                <div className="space-y-3">
+                                    {items.filter(item => item.selected).map((item) => {
+                                        const storeResults = {};
+                                        Object.entries(priceData.results).forEach(([storeName, results]) => {
+                                            const result = results.find(r => r.originalName === item.name);
+                                            storeResults[storeName] = result;
+                                        });
 
-                            return (
-                                <div key={idx} className={`p-3 rounded-xl border ${foundProduct ? 'border-slate-200 bg-white' : 'border-red-100 bg-red-50'}`}>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <p className="font-medium text-sm text-slate-900">{item.originalName}</p>
-                                        <span className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">x{qty}</span>
+                                        return (
+                                            <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-3">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <p className="font-medium text-sm text-slate-900">{item.name}</p>
+                                                    <span className="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-500">x{item.quantity}</span>
+                                                </div>
+                                                <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Object.keys(totals).length}, 1fr)` }}>
+                                                    {Object.entries(storeResults).map(([storeName, result]) => {
+                                                        const products = result?.products || [];
+                                                        const hasProducts = products.length > 0;
+                                                        const carouselKey = `${item.id}-${storeName}`;
+                                                        const currentIndex = selectedProductIndices[carouselKey] || 0;
+                                                        const currentProduct = products[currentIndex];
+
+                                                        const handlePrevProduct = () => {
+                                                            const newIndex = currentIndex > 0 ? currentIndex - 1 : products.length - 1;
+                                                            setSelectedProductIndices(prev => ({
+                                                                ...prev,
+                                                                [carouselKey]: newIndex
+                                                            }));
+                                                            // Cache the selected product
+                                                            setSelectedProducts(prev => ({
+                                                                ...prev,
+                                                                [carouselKey]: products[newIndex]
+                                                            }));
+                                                        };
+
+                                                        const handleNextProduct = () => {
+                                                            const newIndex = currentIndex < products.length - 1 ? currentIndex + 1 : 0;
+                                                            setSelectedProductIndices(prev => ({
+                                                                ...prev,
+                                                                [carouselKey]: newIndex
+                                                            }));
+                                                            // Cache the selected product
+                                                            setSelectedProducts(prev => ({
+                                                                ...prev,
+                                                                [carouselKey]: products[newIndex]
+                                                            }));
+                                                        };
+
+                                                        return (
+                                                            <div key={storeName} className={`p-2 rounded-lg border ${hasProducts ? 'border-slate-200 bg-slate-50' : 'border-red-100 bg-red-50'}`}>
+                                                                {hasProducts ? (
+                                                                    <div className="relative">
+                                                                        {/* Product carousel */}
+                                                                        <div className="p-2 rounded-lg bg-white border border-emerald-200">
+                                                                            <div className="flex gap-2">
+                                                                                {currentProduct.imageUrl ? (
+                                                                                    <img
+                                                                                        src={currentProduct.imageUrl}
+                                                                                        alt={currentProduct.name}
+                                                                                        className="w-20 h-20 object-contain rounded bg-white flex-shrink-0"
+                                                                                    />
+                                                                                ) : (
+                                                                                    <div className="w-20 h-20 rounded bg-slate-100 flex items-center justify-center flex-shrink-0">
+                                                                                        <Package className="h-8 w-8 text-slate-400" />
+                                                                                    </div>
+                                                                                )}
+                                                                                <div className="flex-1 min-w-0 space-y-1">
+                                                                                    {(currentProduct.matchScore || currentProduct.hasDiscount) && (
+                                                                                        <div className="flex items-center gap-1 flex-wrap">
+                                                                                            {currentProduct.matchScore && (
+                                                                                                <span className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-medium">
+                                                                                                    {currentProduct.matchScore.toFixed(0)}% match
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {currentProduct.hasDiscount && (
+                                                                                                <span className="text-[9px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-bold">
+                                                                                                    🏷️ DISCOUNT
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {currentProduct.matchReason && (
+                                                                                                <span className="text-[9px] text-slate-400" title={currentProduct.matchReason}>
+                                                                                                    {currentProduct.matchReason}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <p className="text-xs text-slate-600 line-clamp-2 leading-tight" title={currentProduct.name}>{currentProduct.name}</p>
+                                                                                    <div className="flex items-baseline gap-1.5">
+                                                                                        <span className="font-bold text-emerald-600 text-base">€{currentProduct.price.toFixed(2)}</span>
+                                                                                        <span className="text-[10px] text-slate-400">€{currentProduct.unitPrice}/{currentProduct.unit}</span>
+                                                                                    </div>
+                                                                                    {!currentProduct.available && (
+                                                                                        <p className="text-[10px] text-red-500 font-medium">Out of stock</p>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Carousel controls */}
+                                                                        {products.length > 1 && (
+                                                                            <div className="flex items-center justify-between mt-2">
+                                                                                <button
+                                                                                    onClick={handlePrevProduct}
+                                                                                    className="p-1 hover:bg-slate-200 rounded-full transition-colors"
+                                                                                    title="Previous product"
+                                                                                >
+                                                                                    <ChevronLeft className="h-4 w-4 text-slate-600" />
+                                                                                </button>
+                                                                                <span className="text-[10px] text-slate-500 font-medium">
+                                                                                    {currentIndex + 1} of {products.length}
+                                                                                </span>
+                                                                                <button
+                                                                                    onClick={handleNextProduct}
+                                                                                    className="p-1 hover:bg-slate-200 rounded-full transition-colors"
+                                                                                    title="Next product"
+                                                                                >
+                                                                                    <ChevronRight className="h-4 w-4 text-slate-600" />
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex flex-col items-center justify-center h-32 text-red-600">
+                                                                        <AlertCircle className="h-6 w-6 mb-1" />
+                                                                        <p className="text-xs">Not found</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : (
+                            /* Single store view */
+                            <div className="space-y-3">
+                                {/* Summary */}
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                                        <p className="text-xs text-emerald-600 font-medium mb-1">Estimated Total</p>
+                                        <p className="text-xl font-bold text-emerald-700">€{totals?.single?.total.toFixed(2) || '0.00'}</p>
                                     </div>
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                        <p className="text-xs text-slate-500 font-medium mb-1">Found Items</p>
+                                        <p className="text-xl font-bold text-slate-700">
+                                            {totals?.single?.found || 0} <span className="text-sm font-normal text-slate-400">/ {selectedCount}</span>
+                                        </p>
+                                    </div>
+                                </div>
 
-                                    {foundProduct ? (
-                                        <div className="flex gap-3">
-                                            {foundProduct.imageUrl ? (
-                                                <img src={foundProduct.imageUrl} alt={foundProduct.name} className="h-12 w-12 object-contain rounded bg-white border border-slate-100" />
+                                {/* List */}
+                                {(Array.isArray(priceData.results) ? priceData.results : priceData).map((item, idx) => {
+                                    const foundProduct = item.products && item.products.length > 0 ? item.products[0] : null;
+                                    const originalItem = items.find(i => i.name === item.originalName);
+                                    const qty = originalItem ? originalItem.quantity : 1;
+
+                                    return (
+                                        <div key={idx} className={`p-3 rounded-xl border ${foundProduct ? 'border-slate-200 bg-white' : 'border-red-100 bg-red-50'}`}>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <p className="font-medium text-sm text-slate-900">{item.originalName}</p>
+                                                <span className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">x{qty}</span>
+                                            </div>
+
+                                            {foundProduct ? (
+                                                <div className="flex gap-3">
+                                                    {foundProduct.imageUrl ? (
+                                                        <img src={foundProduct.imageUrl} alt={foundProduct.name} className="h-12 w-12 object-contain rounded bg-white border border-slate-100" />
+                                                    ) : (
+                                                        <div className="h-12 w-12 rounded bg-slate-100 flex items-center justify-center">
+                                                            <Package className="h-5 w-5 text-slate-400" />
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-slate-600 truncate mb-1" title={foundProduct.name}>{foundProduct.name}</p>
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="font-bold text-emerald-600">€{foundProduct.price.toFixed(2)}</span>
+                                                            <span className="text-[10px] text-slate-400">€{foundProduct.unitPrice}/{foundProduct.unit}</span>
+                                                        </div>
+                                                        {!foundProduct.available && (
+                                                            <p className="text-[10px] text-red-500 font-medium mt-1">Out of stock</p>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             ) : (
-                                                <div className="h-12 w-12 rounded bg-slate-100 flex items-center justify-center">
-                                                    <Package className="h-5 w-5 text-slate-400" />
+                                                <div className="flex items-center gap-2 text-red-600 text-xs">
+                                                    <AlertCircle className="h-3 w-3" />
+                                                    <span>Not found or unavailable</span>
                                                 </div>
                                             )}
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs text-slate-600 truncate mb-1" title={foundProduct.name}>{foundProduct.name}</p>
-                                                <div className="flex items-baseline gap-2">
-                                                    <span className="font-bold text-emerald-600">€{foundProduct.price.toFixed(2)}</span>
-                                                    <span className="text-[10px] text-slate-400">€{foundProduct.unitPrice}/{foundProduct.unit}</span>
-                                                </div>
-                                                {!foundProduct.available && (
-                                                    <p className="text-[10px] text-red-500 font-medium mt-1">Out of stock</p>
-                                                )}
-                                            </div>
                                         </div>
-                                    ) : (
-                                        <div className="flex items-center gap-2 text-red-600 text-xs">
-                                            <AlertCircle className="h-3 w-3" />
-                                            <span>Not found or unavailable</span>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                                    );
+                                })}
+                            </div>
+                        )}
 
-                    <div className="mt-4 pt-4 border-t border-slate-100">
-                        <button
-                            onClick={handleExport}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl shadow-md transition-all font-medium"
-                        >
-                            <ShoppingCart className="h-4 w-4" />
-                            Add Available Items to Cart
-                        </button>
+                        <div className="mt-4 pt-4 border-t border-slate-100">
+                            <button
+                                onClick={handleExport}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl shadow-md transition-all font-medium"
+                            >
+                                <ShoppingCart className="h-4 w-4" />
+                                Add Available Items to Cart
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

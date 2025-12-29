@@ -6,6 +6,39 @@ import { StoreFactory, StoreName } from './stores';
 
 const logger = createLogger('BG');
 
+// Track content script ready state per tab
+const contentScriptReadyMap = new Map<number, boolean>();
+
+/**
+ * Wait for content script to signal it's ready, with timeout
+ */
+async function waitForContentScriptReady(tabId: number, timeoutMs: number): Promise<void> {
+    const startTime = Date.now();
+
+    // If already ready, return immediately
+    if (contentScriptReadyMap.get(tabId)) {
+        contentScriptReadyMap.delete(tabId); // Clear for next reload
+        logger.info(`Content script already ready in tab ${tabId}`);
+        return;
+    }
+
+    // Wait for ready signal or timeout
+    return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+            if (contentScriptReadyMap.get(tabId)) {
+                clearInterval(checkInterval);
+                contentScriptReadyMap.delete(tabId); // Clear for next reload
+                logger.info(`Content script became ready in tab ${tabId}`);
+                resolve();
+            } else if (Date.now() - startTime > timeoutMs) {
+                clearInterval(checkInterval);
+                logger.warn(`Timeout waiting for content script in tab ${tabId}, proceeding anyway`);
+                resolve();
+            }
+        }, 50); // Check every 50ms
+    });
+}
+
 async function updateJob(job: Job | null): Promise<void> {
     await chrome.storage.session.set({ [CONFIG.STORAGE_KEY]: job });
     if (job) {
@@ -98,8 +131,8 @@ async function startNextPriceCheckStep(job: PriceCheckJob, tabId: number): Promi
 
         logger.info(`Price check completed. Items: ${job.items.length}`);
 
-        // Send results back to the SOURCE tab (Web App)
-        if (job.sourceTabId) {
+        // Send results back to the SOURCE tab (Web App) - only if NOT in multi-store mode
+        if (job.sourceTabId && !job.multiStoreMode) {
             try {
                 // We need to send this to the Content Script of the Web App
                 await chrome.tabs.sendMessage(job.sourceTabId, {
@@ -110,6 +143,8 @@ async function startNextPriceCheckStep(job: PriceCheckJob, tabId: number): Promi
             } catch (error) {
                 logger.error(`Failed to send results to source tab ${job.sourceTabId}`, error);
             }
+        } else if (job.multiStoreMode) {
+            logger.info(`Multi-store mode: skipping individual result send for ${job.currentStoreName}`);
         }
 
         // Optionally close the Barbora tab since we are done
@@ -125,24 +160,130 @@ async function startNextPriceCheckStep(job: PriceCheckJob, tabId: number): Promi
 
     logger.info(`Starting price check search for: ${currentItem.name}`);
 
+    // Wait for content script to be ready (with timeout)
+    await waitForContentScriptReady(tabId, 5000);
+
+    // Send search message - don't wait for response as page will navigate
     try {
         const tab = await chrome.tabs.get(tabId);
-        if (!tab) throw new Error('Barbora tab no longer exists');
-        await chrome.tabs.sendMessage(tabId, { action: "executeSearch", item: currentItem });
+        if (!tab) throw new Error('Tab no longer exists');
+
+        // Send message without waiting for response (Barbora navigates immediately)
+        chrome.tabs.sendMessage(tabId, { action: "executeSearch", item: currentItem }).catch(() => {
+            // Ignore errors - page navigation is expected for Barbora
+            logger.debug('Search message sent, page navigating (expected for Barbora)');
+        });
+
+        logger.info('✅ Search message sent successfully');
     } catch (error) {
         logger.error('Failed to send search message', error);
-        // Record error for this item and move on
-        job.results.push({
-            originalName: currentItem.name,
-            products: [],
-            error: 'Failed to communicate with Barbora tab'
-        });
-        job.currentIndex++;
-        await startNextPriceCheckStep(job, tabId);
+        // Record error for this item and move to next item immediately
+        const updatedJob = await getJob();
+        if (updatedJob && updatedJob.type === 'priceCheck' && updatedJob.targetTabId === tabId) {
+            updatedJob.results.push({
+                originalName: currentItem.name,
+                products: [],
+                error: 'Failed to communicate with tab'
+            });
+            updatedJob.currentIndex++;
+            await updateJob(updatedJob);
+            await startNextPriceCheckStep(updatedJob, tabId);
+        }
     }
 }
 
-async function handleStartPriceCheckJob(items: ShoppingListItem[], sourceTabId: number, storeName: StoreName = 'barbora'): Promise<{ status: string; message?: string }> {
+async function handleMultiStorePriceCheck(items: ShoppingListItem[], sourceTabId: number, stores: StoreName[]): Promise<{ status: string; message?: string }> {
+    try {
+        logger.info(`\n🚀 Starting multi-store price check for ${stores.length} stores: ${stores.join(', ')}`);
+        logger.info(`   Items to check: ${items.length}`);
+        logger.info(`   Source tab ID: ${sourceTabId}`);
+
+        if (!items || items.length === 0) {
+            logger.error('❌ No items provided for price check');
+            return { status: "error", message: "No items provided" };
+        }
+
+        if (!stores || stores.length === 0) {
+            logger.error('❌ No stores provided for price check');
+            return { status: "error", message: "No stores provided" };
+        }
+
+        const allResults: { [storeName: string]: PriceCheckItemResult[] } = {};
+
+        // Run price check for each store sequentially
+        for (const storeName of stores) {
+            logger.info(`\n========== Checking prices on ${storeName} ==========`);
+
+            // Run single store price check in multi-store mode
+            const result = await handleStartPriceCheckJob(items, sourceTabId, storeName, true);
+
+            if (result.status === 'success') {
+                // Wait for this store's price check to complete
+                logger.info(`Waiting for ${storeName} price check to complete...`);
+                await waitForPriceCheckCompletion(storeName);
+
+                // Get results from completed job
+                const job = await getJob();
+                if (job && job.type === 'priceCheck') {
+                    allResults[storeName] = job.results;
+                    logger.info(`✅ Collected ${job.results.length} results from ${storeName}`);
+
+                    // Close the store tab
+                    if (job.targetTabId) {
+                        await chrome.tabs.remove(job.targetTabId);
+                        logger.info(`🗑️ Closed tab for ${storeName}`);
+                    }
+
+                    // Clear the job to prevent collision with next store
+                    await updateJob(null);
+                    logger.info(`🧹 Cleared job for ${storeName}`);
+
+                    // Add delay before starting next store to ensure clean separation
+                    if (stores.indexOf(storeName) < stores.length - 1) {
+                        logger.info('⏳ Waiting 2 seconds before next store...');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+                } else {
+                    logger.warn(`⚠️ No job found after ${storeName} completion`);
+                }
+            } else {
+                logger.error(`❌ Failed to start price check for ${storeName}: ${result.message}`);
+            }
+        }
+
+        // Send aggregated results back to web app
+        logger.info('All store price checks completed, sending aggregated results');
+        await chrome.tabs.sendMessage(sourceTabId, {
+            action: 'priceCheckFinished',
+            results: allResults
+        });
+
+        return { status: "success", message: "Multi-store price check completed." };
+    } catch (error) {
+        logger.error('Error in multi-store price check', error);
+        return { status: "error", message: error instanceof Error ? error.message : 'Unknown error' };
+    }
+}
+
+async function waitForPriceCheckCompletion(storeName: string): Promise<void> {
+    return new Promise((resolve) => {
+        const checkInterval = setInterval(async () => {
+            const job = await getJob();
+            if (!job || !job.isRunning) {
+                clearInterval(checkInterval);
+                resolve();
+            }
+        }, 500);
+
+        // Timeout after 5 minutes
+        setTimeout(() => {
+            clearInterval(checkInterval);
+            resolve();
+        }, 5 * 60 * 1000);
+    });
+}
+
+async function handleStartPriceCheckJob(items: ShoppingListItem[], sourceTabId: number, storeName: StoreName = 'barbora', multiStoreMode: boolean = false): Promise<{ status: string; message?: string }> {
     try {
         logger.info(`Starting price check job with ${items.length} items from tab ${sourceTabId} on ${storeName}`);
 
@@ -161,9 +302,15 @@ async function handleStartPriceCheckJob(items: ShoppingListItem[], sourceTabId: 
             isRunning: true,
             status: 'idle',
             targetTabId: storeTab.id,
-            sourceTabId: sourceTabId
+            sourceTabId: sourceTabId,
+            multiStoreMode: multiStoreMode,
+            currentStoreName: storeName
         };
         await updateJob(newJob);
+
+        logger.info(`⏳ Waiting for ${store.config.name} tab to load...`);
+        // Wait a bit for the tab to start loading before returning
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         return { status: "success", message: "Price check started." };
     } catch (error) {
@@ -218,13 +365,26 @@ async function handleTaskCompleted(status: 'success' | 'notFound', reason?: stri
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === "startShoppingJob") {
+    if (message.action === 'contentScriptReady' && sender.tab?.id) {
+        contentScriptReadyMap.set(sender.tab.id, true);
+        logger.info(`✅ Content script ready in tab ${sender.tab.id}`);
+        return false; // Don't send response
+    }
+    else if (message.action === "startShoppingJob") {
         handleStartShoppingJob(message.items, message.store || 'barbora').then(sendResponse);
         return true;
     }
     else if (message.action === "startPriceCheckJob") {
         const sourceTabId = sender.tab?.id || 0;
-        handleStartPriceCheckJob(message.items, sourceTabId, message.store || 'barbora').then(sendResponse);
+        const stores = message.stores || [message.store || 'barbora'];
+
+        logger.info(`📨 Received startPriceCheckJob message`);
+        logger.info(`   Items: ${message.items?.length || 0}`);
+        logger.info(`   Stores: ${stores.join(', ')}`);
+        logger.info(`   Source tab: ${sourceTabId}`);
+
+        // Run price checks for all stores sequentially and aggregate results
+        handleMultiStorePriceCheck(message.items, sourceTabId, stores).then(sendResponse);
         return true;
     }
     else if (message.action === "taskCompleted") {
@@ -290,13 +450,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     // Log all tab updates for debugging
     const job = await getJob();
+
+    // ENHANCED DEBUG LOGGING
     if (job?.isRunning && job.targetTabId === tabId) {
-        logger.debug(`Tab ${tabId} update: status=${changeInfo.status}, url=${tab.url}, jobStatus=${job.status}`);
+        logger.info(`🔄 Tab ${tabId} update: status=${changeInfo.status}, url=${tab.url}, jobStatus=${job.status}, jobType=${job.type}`);
     }
 
     if (changeInfo.status !== 'complete') {
         return;
     }
+
+    logger.info(`✅ Tab ${tabId} finished loading: ${tab.url}`);
 
     // Check if this is a supported store domain
     const isSupportedStore = tab.url?.includes('barbora.lt') ||

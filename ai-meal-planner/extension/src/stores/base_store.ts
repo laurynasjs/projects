@@ -11,6 +11,8 @@ export interface Product {
     available: boolean;
     imageUrl?: string;
     element?: Element;
+    hasDiscount?: boolean;
+    promotionPrice?: number;
 }
 
 export interface StoreConfig {

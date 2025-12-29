@@ -7,6 +7,7 @@ import { createLogger } from './shared/logger';
 import { BarboraDOM } from './content/dom-helpers';
 import { parseIngredient, parsePackageSize, calculatePackagesNeeded } from './shared/ingredient-parser';
 import { StoreFactory, BaseStore } from './stores';
+import { rankProducts } from './shared/product-matcher';
 
 const logger = createLogger('CS');
 console.log('🟢 Content script imports loaded, logger created');
@@ -28,59 +29,97 @@ async function performAddToCart(item: ShoppingListItem, retryCount: number = 0):
     logger.info(`🛒 Adding "${item.name}" to cart (attempt ${retryCount + 1}/${CONFIG.MAX_RETRIES + 1})`);
 
     try {
-        // Wait for product cards to load (no Shadow DOM needed)
-        logger.info('⏳ Waiting for products to load...');
-        await BarboraDOM.waitForElement(CONFIG.SELECTORS.PRODUCT_CARD);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        let bestProduct: ParsedProduct;
+        let calculatedQuantity: number;
 
-        // Parse current search results
-        logger.info('📋 Parsing search results...');
-        const products = await parseSearchResults();
+        // Check if we have a cached product from carousel selection
+        if (item.cachedProduct) {
+            logger.info('✅ Using cached product from carousel - skipping search!');
+            logger.info(`   Product: ${item.cachedProduct.name}`);
+            logger.info(`   Price: €${item.cachedProduct.price}`);
 
-        logger.info(`✅ Found ${products.length} products total`);
+            // Wait for products to load
+            await BarboraDOM.waitForElement(CONFIG.SELECTORS.PRODUCT_CARD);
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-        if (products.length === 0) {
-            throw new Error('No products found on the page');
-        }
-
-        // Find available products and select best value by unit price
-        const availableProducts = products.filter(p => p.available);
-
-        logger.info(`✅ ${availableProducts.length} products available`);
-
-        if (availableProducts.length === 0) {
-            throw new Error('No available products found');
-        }
-
-        // Parse ingredient to get needed amount
-        const parsed = parseIngredient(item.name);
-        logger.info(`📊 Recipe needs: ${parsed.neededAmount}${parsed.unit} of "${parsed.name}"`);
-
-        // Sort by unit price (lowest first)
-        availableProducts.sort((a, b) => a.unitPrice - b.unitPrice);
-        const bestProduct = availableProducts[0];
-
-        // Parse package size from product name
-        const packageInfo = parsePackageSize(bestProduct.name);
-        let packagesToAdd = 1;
-
-        if (packageInfo && parsed.unit !== 'none') {
-            packagesToAdd = calculatePackagesNeeded(
-                parsed.neededAmount,
-                parsed.unit,
-                packageInfo.size,
-                packageInfo.unit,
-                parsed.name
+            // Find the exact product on page
+            const parsedForSearch = parseIngredient(item.name);
+            const products = await parseSearchResults(parsedForSearch.name);
+            const matchedProduct = products.find(p =>
+                p.name === item.cachedProduct!.name &&
+                Math.abs(p.price - item.cachedProduct!.price) < 0.01
             );
-            logger.info(`📦 Package size: ${packageInfo.size}${packageInfo.unit} → Need ${packagesToAdd} package(s)`);
+
+            if (!matchedProduct) {
+                throw new Error('Cached product not found on page - may have changed');
+            }
+
+            bestProduct = matchedProduct;
+
+            // Calculate quantity for cached product
+            const parsed = parseIngredient(item.name);
+            const packageInfo = parsePackageSize(bestProduct.name);
+
+            if (packageInfo && parsed.unit !== 'none') {
+                calculatedQuantity = calculatePackagesNeeded(
+                    parsed.neededAmount,
+                    parsed.unit,
+                    packageInfo.size,
+                    packageInfo.unit,
+                    parsed.name
+                );
+                logger.info(`📦 Need ${calculatedQuantity} package(s)`);
+            } else {
+                calculatedQuantity = 1;
+            }
         } else {
-            logger.info(`📦 No package size detected or no quantity needed → Adding 1 package`);
+            // Original flow: search for best product
+            logger.info('⏳ Waiting for products to load...');
+            await BarboraDOM.waitForElement(CONFIG.SELECTORS.PRODUCT_CARD);
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            logger.info('📋 Parsing search results...');
+            const parsedForSearch2 = parseIngredient(item.name);
+            const products = await parseSearchResults(parsedForSearch2.name);
+
+            logger.info(`✅ Found ${products.length} products total`);
+
+            if (products.length === 0) {
+                throw new Error('No products found on the page');
+            }
+
+            const availableProducts = products.filter(p => p.available);
+
+            logger.info(`✅ ${availableProducts.length} products available`);
+
+            if (availableProducts.length === 0) {
+                throw new Error('No available products found');
+            }
+
+            const parsed = parseIngredient(item.name);
+            logger.info(`📊 Recipe needs: ${parsed.neededAmount}${parsed.unit} of "${parsed.name}"`);
+
+            availableProducts.sort((a, b) => a.unitPrice - b.unitPrice);
+            bestProduct = availableProducts[0];
+
+            const packageInfo = parsePackageSize(bestProduct.name);
+
+            if (packageInfo && parsed.unit !== 'none') {
+                calculatedQuantity = calculatePackagesNeeded(
+                    parsed.neededAmount,
+                    parsed.unit,
+                    packageInfo.size,
+                    packageInfo.unit,
+                    parsed.name
+                );
+                logger.info(`📦 Package size: ${packageInfo.size}${packageInfo.unit} → Need ${calculatedQuantity} package(s)`);
+            } else {
+                logger.info(`📦 No package size detected or no quantity needed → Adding 1 package`);
+                calculatedQuantity = 1;
+            }
+
+            logger.info(`🏆 Best value: ${bestProduct.name} - €${bestProduct.price} (€${bestProduct.unitPrice}/${bestProduct.unit})`);
         }
-
-        logger.info(`🏆 Best value: ${bestProduct.name} - €${bestProduct.price} (€${bestProduct.unitPrice}/${bestProduct.unit})`);
-
-        // Store calculated quantity for later use
-        const calculatedQuantity = packagesToAdd;
 
         // Find button in regular DOM (no Shadow DOM)
         logger.info('🔍 Looking for Add to Cart button...');
@@ -168,7 +207,7 @@ async function performAddToCart(item: ShoppingListItem, retryCount: number = 0):
     }
 }
 
-async function parseSearchResults(): Promise<ParsedProduct[]> {
+async function parseSearchResults(searchQuery: string): Promise<ParsedProduct[]> {
     logger.info('Parsing search results...');
 
     try {
@@ -180,10 +219,14 @@ async function parseSearchResults(): Promise<ParsedProduct[]> {
         const storeProducts = await currentStore.getProducts();
         logger.info(`✅ Store returned ${storeProducts.length} products`);
 
+        // Rank products and limit to top 6 (best match + 2 discounts + 3 more)
+        const rankedProducts = rankProducts(storeProducts, searchQuery, 6);
+        logger.info(`🎯 Ranked to ${rankedProducts.length} products (showing best matches with discounts)`);
+
         // Convert to ParsedProduct format (add card element)
-        const products: ParsedProduct[] = storeProducts.map(product => ({
-            ...product,
-            card: product.element || document.createElement('div') // Fallback if no element
+        const products: ParsedProduct[] = rankedProducts.map(product => ({
+            ...product.originalProduct,
+            card: product.originalProduct.element || document.createElement('div') // Fallback if no element
         }));
 
         return products;
@@ -245,7 +288,7 @@ window.addEventListener('priceCheckFromWebApp', (event: Event) => {
     chrome.runtime.sendMessage({
         action: "startPriceCheckJob",
         items: customEvent.detail.items,
-        store: customEvent.detail.store || 'barbora'
+        stores: customEvent.detail.stores || ['barbora']
     });
 });
 
@@ -334,7 +377,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                 case "executeScrape":
                     console.log('🧐 Executing scrape for:', message.item.name);
-                    const products = await parseSearchResults();
+                    const parsedIngredient = parseIngredient(message.item.name);
+                    const products = await parseSearchResults(parsedIngredient.name);
                     // Return only serializable data (remove DOM elements)
                     const serializableProducts: ScrapedProduct[] = products.map(({ card, ...rest }) => rest);
                     // Send message back to background script
@@ -407,7 +451,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
 });
 
+logger.info('🏪 Detected store:', currentStore?.config.name || 'Unknown');
 logger.info('Content script loaded and ready');
+
+// Notify background script that content script is ready
+chrome.runtime.sendMessage({ action: 'contentScriptReady' }).catch(() => {
+    // Ignore errors if background script isn't listening
+});
+
 console.log('🚀 SHOPPING EXTENSION LOADED - Content script is active!');
 
 // Alert on first load to confirm extension is working

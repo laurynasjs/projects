@@ -10,7 +10,7 @@ export const CONFIG = {
         SEARCH_INPUT: '#fti-search',
         SEARCH_BUTTON: '#fti-initiate-search',
         // Barbora uses Shadow DOM attached to these elements
-        PRODUCT_CARD: 'div.next_scoped.product-card-next',
+        PRODUCT_CARD: 'div[id^="fti-product-card"]',  // Target shadow host directly
         SHADOW_HOST: 'div[id^="fti-product-card"]',  // Shadow root is attached here
         UNIT_PRICE: 'div.text-2xs',
         ADD_TO_CART_TEXT: 'Į krepšelį',

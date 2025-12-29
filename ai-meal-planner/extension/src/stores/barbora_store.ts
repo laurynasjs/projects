@@ -47,8 +47,14 @@ export class BarboraStore extends BaseStore {
     }
 
     async getProducts(): Promise<Product[]> {
-        await this.waitForElement(this.config.selectors.productCard);
-        const cards = document.querySelectorAll(this.config.selectors.productCard);
+        // Wait for product cards to appear (li elements with data-testid="product-card-*")
+        await this.waitForElement('li[data-testid^="product-card"]');
+
+        // Additional small wait for all cards to render
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const cards = document.querySelectorAll('li[data-testid^="product-card"]');
+        this.logger.info(`Found ${cards.length} product card elements`);
 
         const products: Product[] = [];
 
@@ -63,51 +69,55 @@ export class BarboraStore extends BaseStore {
             }
         }
 
-        this.logger.info(`Found ${products.length} products`);
+        this.logger.info(`Successfully extracted ${products.length} products from ${cards.length} cards`);
         return products;
     }
 
     private extractProductFromCard(card: Element): Product | null {
-        const shadowHost = card.querySelector(CONFIG.SELECTORS.SHADOW_HOST);
-        if (!shadowHost || !shadowHost.shadowRoot) {
+        // Find the div with data-b-for-cart attribute containing JSON product data
+        const dataDiv = card.querySelector('[data-b-for-cart]');
+        if (!dataDiv) {
+            this.logger.warn('No data-b-for-cart element found');
             return null;
         }
 
-        // Get unit price from Shadow DOM
-        const unitPriceElement = shadowHost.shadowRoot.querySelector(
-            CONFIG.SELECTORS.UNIT_PRICE
-        );
-        if (!unitPriceElement || !unitPriceElement.textContent) {
+        const jsonData = dataDiv.getAttribute('data-b-for-cart');
+        if (!jsonData) {
+            this.logger.warn('No JSON data in data-b-for-cart');
             return null;
         }
 
-        const priceText = unitPriceElement.textContent.split('€')[0].replace(',', '.').trim();
-        const unitPrice = this.parsePrice(priceText);
+        try {
+            const data = JSON.parse(jsonData);
 
-        if (unitPrice === Infinity) {
+            // Extract product information from JSON
+            const name = data.title || 'Unknown Product';
+            const price = data.price || 0;
+            const unitPrice = data.comparative_unit_price || price;
+            const unit = data.comparative_unit || 'vnt';
+            const imageUrl = data.image || data.big_image;
+            const available = data.status === 'active';
+
+            // Check for promotion/discount
+            const hasDiscount = !!(data.promotion || data.promotionGroup);
+            const promotionPrice = hasDiscount ? price : undefined;
+
+            return {
+                name,
+                price,
+                unitPrice,
+                unit,
+                url: window.location.href,
+                available,
+                imageUrl,
+                element: card,
+                hasDiscount,
+                promotionPrice,
+            };
+        } catch (error) {
+            this.logger.warn('Failed to parse product JSON', error);
             return null;
         }
-
-        // Get product name from Shadow DOM
-        const titleElement = shadowHost.shadowRoot.querySelector('.product-title, h3, .title');
-        const name = titleElement?.textContent?.trim() || 'Unknown Product';
-
-        // Extract unit (kg, l, vnt, etc.)
-        const unitMatch = unitPriceElement.textContent.match(/€\/(\w+)/);
-        const unit = unitMatch ? unitMatch[1] : 'vnt';
-
-        // For now, assume price = unitPrice (we'd need to extract actual price separately)
-        const price = unitPrice;
-
-        return {
-            name,
-            price,
-            unitPrice,
-            unit,
-            url: window.location.href,
-            available: true,
-            element: card,
-        };
     }
 
     async addToCart(product: Product, quantity: number = 1): Promise<void> {
@@ -117,21 +127,8 @@ export class BarboraStore extends BaseStore {
             throw new Error('Product element not available');
         }
 
-        const shadowHost = product.element.querySelector(CONFIG.SELECTORS.SHADOW_HOST);
-        if (!shadowHost || !shadowHost.shadowRoot) {
-            throw new Error('Shadow DOM not found');
-        }
-
-        // Find "Add to Cart" button in Shadow DOM
-        const buttons = shadowHost.shadowRoot.querySelectorAll('button');
-        let addButton: HTMLElement | null = null;
-
-        for (const button of buttons) {
-            if (button.textContent?.trim() === CONFIG.SELECTORS.ADD_TO_CART_TEXT) {
-                addButton = button as HTMLElement;
-                break;
-            }
-        }
+        // Find "Add to Cart" button with data-cnstrc-btn="add_to_cart"
+        const addButton = product.element.querySelector('button[data-cnstrc-btn="add_to_cart"]') as HTMLElement;
 
         if (!addButton) {
             throw new Error('Add to cart button not found');
@@ -140,24 +137,13 @@ export class BarboraStore extends BaseStore {
         addButton.click();
         await new Promise((resolve) => setTimeout(resolve, 500));
 
-        // Increase quantity if needed
+        // TODO: Implement quantity adjustment if needed
+        // For now, we just add to cart once
         if (quantity > 1) {
-            await this.increaseQuantity(shadowHost.shadowRoot, quantity - 1);
+            this.logger.warn(`Quantity adjustment not yet implemented for Barbora (requested: ${quantity})`);
         }
 
         this.logger.info('Product added to cart');
-    }
-
-    private async increaseQuantity(shadowRoot: ShadowRoot, times: number): Promise<void> {
-        const increaseButton = await this.findButtonByAriaLabel(
-            shadowRoot,
-            CONFIG.SELECTORS.INCREASE_QUANTITY_ARIA
-        );
-
-        for (let i = 0; i < times; i++) {
-            increaseButton.click();
-            await new Promise((resolve) => setTimeout(resolve, CONFIG.TIMEOUTS.QUANTITY_CLICK_DELAY));
-        }
     }
 
     private async findButtonByAriaLabel(
