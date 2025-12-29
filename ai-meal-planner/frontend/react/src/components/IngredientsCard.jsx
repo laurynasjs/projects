@@ -232,7 +232,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
     const totals = calculateTotals();
 
     return (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative max-w-4xl mx-auto">
             <div className="flex items-center gap-2 mb-4">
                 <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
                     <Package className="h-4 w-4 text-emerald-600" />
@@ -488,24 +488,24 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                                         };
 
                                                         return (
-                                                            <div key={storeName} className={`p-2 rounded-lg border ${hasProducts ? 'border-slate-200 bg-slate-50' : 'border-red-100 bg-red-50'}`}>
+                                                            <div key={storeName} className={`p-1.5 rounded-lg border ${hasProducts ? 'border-slate-200 bg-slate-50' : 'border-red-100 bg-red-50'}`}>
                                                                 {hasProducts ? (
                                                                     <div className="relative">
                                                                         {/* Product carousel */}
-                                                                        <div className="p-2 rounded-lg bg-white border border-emerald-200">
-                                                                            <div className="flex gap-2">
+                                                                        <div className="p-1.5 rounded-lg bg-white border border-emerald-200">
+                                                                            <div className="flex gap-1.5">
                                                                                 {currentProduct.imageUrl ? (
                                                                                     <img
                                                                                         src={currentProduct.imageUrl}
                                                                                         alt={currentProduct.name}
-                                                                                        className="w-20 h-20 object-contain rounded bg-white flex-shrink-0"
+                                                                                        className="w-12 h-12 object-contain rounded bg-white flex-shrink-0"
                                                                                     />
                                                                                 ) : (
-                                                                                    <div className="w-20 h-20 rounded bg-slate-100 flex items-center justify-center flex-shrink-0">
-                                                                                        <Package className="h-8 w-8 text-slate-400" />
+                                                                                    <div className="w-12 h-12 rounded bg-slate-100 flex items-center justify-center flex-shrink-0">
+                                                                                        <Package className="h-5 w-5 text-slate-400" />
                                                                                     </div>
                                                                                 )}
-                                                                                <div className="flex-1 min-w-0 space-y-1">
+                                                                                <div className="flex-1 min-w-0 space-y-0.5">
                                                                                     {(currentProduct.matchScore || currentProduct.hasDiscount) && (
                                                                                         <div className="flex items-center gap-1 flex-wrap">
                                                                                             {currentProduct.matchScore && (
@@ -525,10 +525,10 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                                                                             )}
                                                                                         </div>
                                                                                     )}
-                                                                                    <p className="text-xs text-slate-600 line-clamp-2 leading-tight" title={currentProduct.name}>{currentProduct.name}</p>
-                                                                                    <div className="flex items-baseline gap-1.5">
-                                                                                        <span className="font-bold text-emerald-600 text-base">€{currentProduct.price.toFixed(2)}</span>
-                                                                                        <span className="text-[10px] text-slate-400">€{currentProduct.unitPrice}/{currentProduct.unit}</span>
+                                                                                    <p className="text-[10px] text-slate-600 line-clamp-2 leading-tight" title={currentProduct.name}>{currentProduct.name}</p>
+                                                                                    <div className="flex items-baseline gap-0.5">
+                                                                                        <span className="font-bold text-emerald-600 text-xs">€{currentProduct.price.toFixed(2)}</span>
+                                                                                        <span className="text-[8px] text-slate-400">€{currentProduct.unitPrice}/{currentProduct.unit}</span>
                                                                                     </div>
                                                                                     {!currentProduct.available && (
                                                                                         <p className="text-[10px] text-red-500 font-medium">Out of stock</p>
@@ -539,7 +539,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
 
                                                                         {/* Carousel controls */}
                                                                         {products.length > 1 && (
-                                                                            <div className="flex items-center justify-between mt-2">
+                                                                            <div className="flex items-center justify-between mt-1">
                                                                                 <button
                                                                                     onClick={handlePrevProduct}
                                                                                     className="p-1 hover:bg-slate-200 rounded-full transition-colors"
