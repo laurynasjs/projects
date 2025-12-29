@@ -61,6 +61,46 @@ const sampleRecipes = [
         guests: "8-10",
         prepTime: "1.5 hours",
         color: "from-yellow-400 to-amber-500"
+    },
+    {
+        id: 7,
+        theme: "Naujų Metų Proga",
+        emoji: "🎉",
+        description: "Iškilmingas Naujųjų Metų stalas su šampanu ir užkandžiais",
+        dishes: ["Lašiša", "Sūrių lenta", "Salotos", "Tortas"],
+        guests: "8-10",
+        prepTime: "3 valandos",
+        color: "from-purple-400 to-pink-500"
+    },
+    {
+        id: 8,
+        theme: "Kūčių Patiekalai",
+        emoji: "🎄",
+        description: "Tradiciniai Kūčių vakarienės patiekalai be mėsos",
+        dishes: ["Silkė", "Grybų sriuba", "Žuvis", "Kisielius"],
+        guests: "6-8",
+        prepTime: "4 valandos",
+        color: "from-green-400 to-teal-500"
+    },
+    {
+        id: 9,
+        theme: "Kalėdų Patiekalai",
+        emoji: "🎅",
+        description: "Šventiniai Kalėdų pietūs su tradiciniais patiekalais",
+        dishes: ["Antiena", "Bulvės", "Kopūstai", "Pyragas"],
+        guests: "8-12",
+        prepTime: "4 valandos",
+        color: "from-red-400 to-rose-500"
+    },
+    {
+        id: 10,
+        theme: "Užkandžiai Darželiui",
+        emoji: "🥕",
+        description: "Sveiki ir skanūs užkandžiai vaikams visai savaitei",
+        dishes: ["Vaisiai", "Daržovės", "Jogurtas", "Sumuštiniai"],
+        guests: "1 vaikas",
+        prepTime: "30 minučių",
+        color: "from-lime-400 to-green-500"
     }
 ];
 
@@ -96,7 +136,7 @@ export default function RecipeCarousel({ onSelectRecipe }) {
                     <div className="h-8 w-8 rounded-lg bg-violet-100 flex items-center justify-center">
                         <Sparkles className="h-4 w-4 text-violet-600" />
                     </div>
-                    <h3 className="font-semibold text-slate-900">Menu Ideas</h3>
+                    <h3 className="font-semibold text-slate-900">Meniu Idėjos</h3>
                 </div>
                 <span className="text-xs text-slate-400">{currentIndex + 1} / {sampleRecipes.length}</span>
             </div>
@@ -185,7 +225,7 @@ export default function RecipeCarousel({ onSelectRecipe }) {
                 onClick={() => handleSelectRecipe(sampleRecipes[currentIndex])}
                 className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-xl transition-all font-medium"
             >
-                Plan This Menu
+                Planuoti Šį Meniu
             </button>
         </div>
     );

@@ -236,9 +236,9 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                 <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
                     <Package className="h-4 w-4 text-emerald-600" />
                 </div>
-                <h3 className="font-semibold text-slate-900">Shopping List</h3>
+                <h3 className="font-semibold text-slate-900">Pirkinių Sąrašas</h3>
                 <span className="ml-auto text-xs text-slate-500">
-                    {selectedCount} / {items.length} selected
+                    {selectedCount} / {items.length} pasirinkta
                 </span>
             </div>
 
@@ -320,7 +320,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                             type="text"
                             value={newItemName}
                             onChange={(e) => setNewItemName(e.target.value)}
-                            placeholder="Type ingredient name..."
+                            placeholder="Įveskite ingrediento pavadinimą..."
                             className="flex-1 px-2 py-1 text-sm bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500"
                             autoFocus
                             onKeyDown={(e) => {
@@ -347,13 +347,13 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                         className="w-full py-2 flex items-center justify-center gap-2 text-sm text-slate-500 hover:text-emerald-600 hover:bg-slate-50 rounded-lg border border-dashed border-slate-200 transition-colors"
                     >
                         <Plus className="h-4 w-4" />
-                        Add Ingredient
+                        Pridėti Ingredientą
                     </button>
                 )}
             </div>
 
             <div className="mb-3">
-                <label className="block text-xs font-medium text-slate-600 mb-2">Compare Prices At:</label>
+                <label className="block text-xs font-medium text-slate-600 mb-2">Palyginti Kainas:</label>
                 <div className="grid grid-cols-2 gap-2">
                     {[
                         { id: 'barbora', label: '🛒 Barbora' },
@@ -391,7 +391,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                     ) : (
                         <Search className="h-4 w-4" />
                     )}
-                    {isCheckingPrices ? 'Checking...' : 'Check Prices'}
+                    {isCheckingPrices ? 'Tikrinama...' : 'Tikrinti Kainas'}
                 </button>
 
                 <button
@@ -400,7 +400,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                     className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <ShoppingCart className="h-4 w-4" />
-                    Send to Cart
+                    Siųsti į Krepšelį
                 </button>
             </div>
 
@@ -408,7 +408,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
             {showPriceModal && priceData && (
                 <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-10 rounded-2xl flex flex-col p-6 animate-in fade-in zoom-in-95 duration-200">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-lg text-slate-900">Price Estimate</h3>
+                        <h3 className="font-bold text-lg text-slate-900">Kainų Įvertinimas</h3>
                         <button
                             onClick={() => setShowPriceModal(false)}
                             className="p-1 hover:bg-slate-100 rounded-full"
@@ -432,7 +432,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                                 {storeName === 'maxima' && '🏢 Maxima'}
                                             </p>
                                             <p className="text-2xl font-bold text-emerald-700 mb-1">€{storeTotal.total.toFixed(2)}</p>
-                                            <p className="text-xs text-slate-600">{storeTotal.found} / {selectedCount} items</p>
+                                            <p className="text-xs text-slate-600">{storeTotal.found} / {selectedCount} prekių</p>
                                         </div>
                                     ))}
                                 </div>
@@ -509,12 +509,12 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                                                                         <div className="flex items-center gap-1 flex-wrap">
                                                                                             {currentProduct.matchScore && (
                                                                                                 <span className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-medium">
-                                                                                                    {currentProduct.matchScore.toFixed(0)}% match
+                                                                                                    {currentProduct.matchScore.toFixed(0)}% atitikimas
                                                                                                 </span>
                                                                                             )}
                                                                                             {currentProduct.hasDiscount && (
                                                                                                 <span className="text-[9px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-bold">
-                                                                                                    🏷️ DISCOUNT
+                                                                                                    🏷️ NUOLAIDA
                                                                                                 </span>
                                                                                             )}
                                                                                             {currentProduct.matchReason && (
@@ -530,7 +530,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                                                                         <span className="text-[8px] text-slate-400">€{currentProduct.unitPrice}/{currentProduct.unit}</span>
                                                                                     </div>
                                                                                     {!currentProduct.available && (
-                                                                                        <p className="text-[10px] text-red-500 font-medium">Out of stock</p>
+                                                                                        <p className="text-[10px] text-red-500 font-medium">Nėra sandėlyje</p>
                                                                                     )}
                                                                                 </div>
                                                                             </div>
@@ -580,11 +580,11 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                 {/* Summary */}
                                 <div className="grid grid-cols-2 gap-4 mb-4">
                                     <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                                        <p className="text-xs text-emerald-600 font-medium mb-1">Estimated Total</p>
+                                        <p className="text-xs text-emerald-600 font-medium mb-1">Numatoma Suma</p>
                                         <p className="text-xl font-bold text-emerald-700">€{totals?.single?.total.toFixed(2) || '0.00'}</p>
                                     </div>
                                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                        <p className="text-xs text-slate-500 font-medium mb-1">Found Items</p>
+                                        <p className="text-xs text-slate-500 font-medium mb-1">Rasta Prekių</p>
                                         <p className="text-xl font-bold text-slate-700">
                                             {totals?.single?.found || 0} <span className="text-sm font-normal text-slate-400">/ {selectedCount}</span>
                                         </p>
@@ -620,14 +620,14 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                                             <span className="text-[10px] text-slate-400">€{foundProduct.unitPrice}/{foundProduct.unit}</span>
                                                         </div>
                                                         {!foundProduct.available && (
-                                                            <p className="text-[10px] text-red-500 font-medium mt-1">Out of stock</p>
+                                                            <p className="text-[10px] text-red-500 font-medium mt-1">Nėra sandėlyje</p>
                                                         )}
                                                     </div>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-2 text-red-600 text-xs">
                                                     <AlertCircle className="h-3 w-3" />
-                                                    <span>Not found or unavailable</span>
+                                                    <span>Nerasta</span>
                                                 </div>
                                             )}
                                         </div>
@@ -640,7 +640,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                             {/* Store selector for cart */}
                             {priceData.multiStore && (
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-2">Add to Cart At:</label>
+                                    <label className="block text-xs font-medium text-slate-600 mb-2">Pridėti į Krepšelį:</label>
                                     <div className="grid grid-cols-2 gap-2">
                                         {Object.keys(totals || {}).map(storeName => (
                                             <label
@@ -666,7 +666,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                                     {storeName === 'maxima' && '🏢 Maxima'}
                                                 </span>
                                                 {storeName !== 'barbora' && (
-                                                    <span className="ml-auto text-[10px] text-slate-400">Soon</span>
+                                                    <span className="ml-auto text-[10px] text-slate-400">Netrukus</span>
                                                 )}
                                             </label>
                                         ))}
@@ -679,7 +679,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl shadow-md transition-all font-medium"
                             >
                                 <ShoppingCart className="h-4 w-4" />
-                                Add Available Items to Cart
+                                Pridėti Prekes į Krepšelį
                             </button>
                         </div>
                     </div>

@@ -71,13 +71,13 @@ export default function App() {
                 <header className="text-center mb-8">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 shadow-sm mb-4">
                         <PartyPopper className="h-4 w-4 text-violet-500" />
-                        <span className="text-sm font-medium text-slate-600">AI Meal Planner</span>
+                        <span className="text-sm font-medium text-slate-600">AI Patiekalų Planuotojas</span>
                     </div>
                     <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
-                        Plan Your Perfect Meals
+                        Suplanuokite Savo Tobulus Patiekalus
                     </h1>
                     <p className="text-slate-500 max-w-md mx-auto">
-                        Tell me what you'd like to eat and I'll create a meal plan with shopping list
+                        Pasakykite, ką norėtumėte valgyti, ir aš sukursiu patiekalų planą su pirkinių sąrašu
                     </p>
                 </header>
 
@@ -93,10 +93,10 @@ export default function App() {
                                             <Sparkles className="h-8 w-8 text-white" />
                                         </div>
                                         <h2 className="text-lg font-semibold text-slate-900 mb-2">
-                                            Ready to plan your meals?
+                                            Pasiruošę planuoti savo patiekalus?
                                         </h2>
                                         <p className="text-sm text-slate-500 mb-6 max-w-sm">
-                                            Describe what you'd like to eat, dietary preferences, and number of people. I'll handle the rest!
+                                            Apibūdinkite, ką norėtumėte valgyti, mitybos pageidavimus ir žmonių skaičių. Aš pasirūpinsiu viskuo!
                                         </p>
                                         <QuickPrompts onSelect={handleSendMessage} />
                                     </div>
@@ -120,7 +120,7 @@ export default function App() {
                                                 <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3">
                                                     <div className="flex items-center gap-2">
                                                         <div className="animate-spin h-4 w-4 border-2 border-violet-500 border-t-transparent rounded-full"></div>
-                                                        <span className="text-sm text-slate-600">Generating your meal plan...</span>
+                                                        <span className="text-sm text-slate-600">Kuriamas jūsų patiekalų planas...</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -141,7 +141,7 @@ export default function App() {
                                                 </div>
                                                 <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 flex-1">
                                                     <p className="text-sm text-slate-700">
-                                                        ✨ I've created a meal plan for you! Check out the menu and shopping list on the right.
+                                                        ✨ Sukūriau jums patiekalų planą! Peržiūrėkite meniu ir pirkinių sąrašą dešinėje.
                                                     </p>
                                                 </div>
                                             </div>
@@ -155,7 +155,7 @@ export default function App() {
                                 <ChatInput
                                     onSend={handleSendMessage}
                                     isLoading={isLoading}
-                                    placeholder="Describe your meal preferences... (e.g., 3 healthy dinners for 2 people)"
+                                    placeholder="Apibūdinkite savo pageidavimus... (pvz., 3 sveikos vakarienės 2 žmonėms)"
                                 />
                             </div>
                         </div>
@@ -189,7 +189,7 @@ export default function App() {
                                         <Sparkles className="h-6 w-6 text-slate-400" />
                                     </div>
                                     <p className="text-sm text-slate-500">
-                                        Generate a meal plan to see your menu here
+                                        Sukurkite patiekalų planą, kad čia matytumėte savo meniu
                                     </p>
                                 </div>
                             )
@@ -207,7 +207,7 @@ export default function App() {
                                         <Sparkles className="h-6 w-6 text-slate-400" />
                                     </div>
                                     <p className="text-sm text-slate-500">
-                                        Your shopping list will appear here after generating a meal plan
+                                        Jūsų pirkinių sąrašas pasirodys čia sukūrus patiekalų planą
                                     </p>
                                 </div>
                             )
@@ -218,7 +218,7 @@ export default function App() {
                 {/* Extension Info */}
                 <div className="mt-8 text-center">
                     <p className="text-xs text-slate-400">
-                        💡 Install our Chrome extension to automatically add products to your Barbora.lt cart
+                        💡 Įdiekite mūsų Chrome plėtinį, kad automatiškai pridėtumėte produktus į Barbora.lt krepšelį
                     </p>
                 </div>
             </div>

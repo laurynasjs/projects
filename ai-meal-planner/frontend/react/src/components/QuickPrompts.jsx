@@ -1,8 +1,12 @@
 const prompts = [
-    "3 healthy dinners for 2 people",
-    "Quick lunch ideas for this week",
-    "Vegetarian meals for 4 days",
-    "Budget-friendly family dinners"
+    "3 sveikos vakarienės 2 žmonėms",
+    "Greiti pietų receptai šiai savaitei",
+    "Vegetariški patiekalai 4 dienoms",
+    "Ekonomiškos šeimos vakarienės",
+    "Naujų metų proga",
+    "Kūčių patiekalai",
+    "Kalėdų patiekalai",
+    "Sveiki užkandžiai į darželį savaitei"
 ];
 
 export default function QuickPrompts({ onSelect }) {

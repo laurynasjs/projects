@@ -11,12 +11,12 @@ export default function MealsList({ meals, selectedMeals, onMealToggle }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-3 px-1">
-        <span className="text-sm font-medium text-slate-700">Your Meals</span>
+        <span className="text-sm font-medium text-slate-700">Jūsų Patiekalai</span>
         <span className="text-xs text-slate-500">
-          {selectedCount} / {meals.length} selected
+          {selectedCount} / {meals.length} pasirinkta
         </span>
       </div>
-      
+
       {meals.map((meal, idx) => {
         const isExpanded = expandedMeal === idx;
         const isSelected = selectedMeals.includes(idx);
@@ -24,11 +24,10 @@ export default function MealsList({ meals, selectedMeals, onMealToggle }) {
         return (
           <div
             key={idx}
-            className={`rounded-2xl border shadow-sm overflow-hidden transition-all ${
-              isSelected 
-                ? 'bg-white border-slate-200' 
+            className={`rounded-2xl border shadow-sm overflow-hidden transition-all ${isSelected
+                ? 'bg-white border-slate-200'
                 : 'bg-slate-50 border-slate-200 opacity-60'
-            }`}
+              }`}
           >
             <div className="p-4">
               <div className="flex items-start gap-3">
@@ -39,7 +38,7 @@ export default function MealsList({ meals, selectedMeals, onMealToggle }) {
                   onClick={(e) => e.stopPropagation()}
                   className="mt-1 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
-                <div 
+                <div
                   className="flex-1 cursor-pointer"
                   onClick={() => setExpandedMeal(isExpanded ? null : idx)}
                 >
@@ -58,7 +57,7 @@ export default function MealsList({ meals, selectedMeals, onMealToggle }) {
                       )}
                     </div>
                     <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full ml-2 flex-shrink-0">
-                      Meal {idx + 1}
+                      Patiekalas {idx + 1}
                     </span>
                   </div>
                 </div>
@@ -69,7 +68,7 @@ export default function MealsList({ meals, selectedMeals, onMealToggle }) {
               <div className="border-t border-slate-100 p-4 bg-gradient-to-br from-amber-50/50 to-orange-50/50">
                 {meal.ingredients && (
                   <div className="mb-4">
-                    <p className="text-xs font-medium text-slate-700 mb-2">Ingredients:</p>
+                    <p className="text-xs font-medium text-slate-700 mb-2">Ingredientai:</p>
                     <ul className="text-xs text-slate-600 space-y-1.5">
                       {meal.ingredients.map((ing, i) => (
                         <li key={i} className="flex items-start gap-2">
@@ -83,7 +82,7 @@ export default function MealsList({ meals, selectedMeals, onMealToggle }) {
 
                 {meal.recipe && meal.recipe.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-slate-700 mb-2">Recipe:</p>
+                    <p className="text-xs font-medium text-slate-700 mb-2">Receptas:</p>
                     <ol className="text-xs text-slate-600 space-y-1.5 list-decimal list-inside">
                       {meal.recipe.map((step, i) => (
                         <li key={i} className="leading-relaxed">{step}</li>

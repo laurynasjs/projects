@@ -2,9 +2,9 @@ import { Lightbulb, ChefHat, ShoppingCart } from 'lucide-react';
 
 export default function TabNavigation({ activeTab, onTabChange }) {
     const tabs = [
-        { id: 'ideas', label: 'Ideas', icon: Lightbulb },
-        { id: 'menu', label: 'Menu', icon: ChefHat },
-        { id: 'shop', label: 'Shop', icon: ShoppingCart }
+        { id: 'ideas', label: 'Idėjos', icon: Lightbulb },
+        { id: 'menu', label: 'Meniu', icon: ChefHat },
+        { id: 'shop', label: 'Parduotuvė', icon: ShoppingCart }
     ];
 
     return (
@@ -18,8 +18,8 @@ export default function TabNavigation({ activeTab, onTabChange }) {
                         key={tab.id}
                         onClick={() => onTabChange(tab.id)}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg transition-all ${isActive
-                                ? 'bg-white text-slate-900 shadow-sm font-medium'
-                                : 'text-slate-500 hover:text-slate-700'
+                            ? 'bg-white text-slate-900 shadow-sm font-medium'
+                            : 'text-slate-500 hover:text-slate-700'
                             }`}
                     >
                         <Icon className={`h-4 w-4 ${isActive ? 'text-violet-600' : ''}`} />
