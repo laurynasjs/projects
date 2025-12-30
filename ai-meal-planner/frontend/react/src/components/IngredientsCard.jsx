@@ -170,7 +170,7 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
         setShowPriceModal(false);
     };
 
-    // Calculate totals from price data
+    // Calculate totals from price data using selected products from carousel
     const calculateTotals = () => {
         if (!priceData) return null;
 
@@ -184,9 +184,14 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
 
                 results.forEach(result => {
                     if (result.products && result.products.length > 0) {
-                        const product = result.products[0];
                         const item = items.find(i => i.name === result.originalName);
-                        const quantity = item ? item.quantity : 1;
+                        if (!item) return;
+
+                        // Use selected product from carousel, or fall back to first product
+                        const carouselKey = `${item.id}-${storeName}`;
+                        const product = selectedProducts[carouselKey] || result.products[0];
+
+                        const quantity = item.quantity;
                         if (product.available) {
                             total += product.price * quantity;
                             found++;
@@ -210,9 +215,14 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
             const results = Array.isArray(priceData.results) ? priceData.results : priceData;
             results.forEach(result => {
                 if (result.products && result.products.length > 0) {
-                    const product = result.products[0];
                     const item = items.find(i => i.name === result.originalName);
-                    const quantity = item ? item.quantity : 1;
+                    if (!item) return;
+
+                    // Use selected product from carousel, or fall back to first product
+                    const carouselKey = `${item.id}-${priceData.storeName || 'barbora'}`;
+                    const product = selectedProducts[carouselKey] || result.products[0];
+
+                    const quantity = item.quantity;
                     if (product.available) {
                         total += product.price * quantity;
                         found++;
@@ -454,10 +464,39 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                         });
 
                                         return (
-                                            <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-3">
+                                            <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-3 relative">
+                                                {Object.keys(storeResults).length > 1 && (
+                                                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-200 -translate-x-1/2 z-10" />
+                                                )}
                                                 <div className="flex justify-between items-start mb-3">
                                                     <p className="font-medium text-sm text-slate-900">{item.name}</p>
-                                                    <span className="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-500">x{item.quantity}</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={() => {
+                                                                setItems(items.map(i =>
+                                                                    i.id === item.id && i.quantity > 1
+                                                                        ? { ...i, quantity: i.quantity - 1 }
+                                                                        : i
+                                                                ));
+                                                            }}
+                                                            className="w-5 h-5 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold"
+                                                        >
+                                                            −
+                                                        </button>
+                                                        <span className="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-500 min-w-[2rem] text-center">x{item.quantity}</span>
+                                                        <button
+                                                            onClick={() => {
+                                                                setItems(items.map(i =>
+                                                                    i.id === item.id
+                                                                        ? { ...i, quantity: i.quantity + 1 }
+                                                                        : i
+                                                                ));
+                                                            }}
+                                                            className="w-5 h-5 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold"
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Object.keys(totals).length}, 1fr)` }}>
                                                     {Object.entries(storeResults).map(([storeName, result]) => {
