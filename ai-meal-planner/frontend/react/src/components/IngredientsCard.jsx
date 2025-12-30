@@ -356,10 +356,10 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                 <label className="block text-xs font-medium text-slate-600 mb-2">Palyginti Kainas:</label>
                 <div className="grid grid-cols-2 gap-2">
                     {[
-                        { id: 'barbora', label: '🛒 Barbora' },
-                        { id: 'iki', label: '🏪 IKI' },
-                        { id: 'rimi', label: '🏬 Rimi' },
-                        { id: 'maxima', label: '🏢 Maxima' }
+                        { id: 'barbora', label: 'Barbora', logo: '/barbora-logo.png' },
+                        { id: 'iki', label: 'IKI', logo: '/iki-logo.png' },
+                        { id: 'rimi', label: 'Rimi', logo: '/rimi-logo.png' },
+                        { id: 'maxima', label: 'Gali būti tu', logo: null }
                     ].map(store => (
                         <label key={store.id} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
                             <input
@@ -374,7 +374,14 @@ export default function IngredientsCard({ ingredients, onExportToExtension }) {
                                 }}
                                 className="w-4 h-4 text-emerald-600 rounded focus:ring-2 focus:ring-emerald-500"
                             />
-                            <span className="text-sm text-slate-700">{store.label}</span>
+                            {store.logo ? (
+                                <div className="flex items-center gap-1.5">
+                                    <img src={store.logo} alt={store.label} className="w-4 h-4 object-contain" />
+                                    <span className="text-sm text-slate-700">{store.label}</span>
+                                </div>
+                            ) : (
+                                <span className="text-sm text-slate-700">{store.label}</span>
+                            )}
                         </label>
                     ))}
                 </div>

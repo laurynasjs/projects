@@ -116,7 +116,7 @@ export default function RecipeCarousel({ onSelectRecipe }) {
     };
 
     const handleSelectRecipe = (recipe) => {
-        const prompt = `I want to plan a ${recipe.theme} for ${recipe.guests} guests. Include ${recipe.dishes.join(', ')}.`;
+        const prompt = `Noriu suplanuoti ${recipe.theme} ${recipe.guests} svečiams. Įtraukti ${recipe.dishes.join(', ')}.`;
         onSelectRecipe(prompt);
     };
 
@@ -225,7 +225,7 @@ export default function RecipeCarousel({ onSelectRecipe }) {
                 onClick={() => handleSelectRecipe(sampleRecipes[currentIndex])}
                 className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-xl transition-all font-medium"
             >
-                Planuoti Šį Meniu
+                Tinka, važiuojam!
             </button>
         </div>
     );

@@ -70,14 +70,14 @@ export default function App() {
                 {/* Header */}
                 <header className="text-center mb-8">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 shadow-sm mb-4">
-                        <PartyPopper className="h-4 w-4 text-violet-500" />
-                        <span className="text-sm font-medium text-slate-600">AI Patiekalų Planuotojas</span>
+                        <img src="/chef-logo.png" alt="VakarieneYra" className="h-4 w-4 object-contain" />
+                        <span className="text-sm font-medium text-slate-600">VakarieneYra</span>
                     </div>
                     <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
-                        Suplanuokite Savo Tobulus Patiekalus
+                        Tai ką valgom?
                     </h1>
                     <p className="text-slate-500 max-w-md mx-auto">
-                        Pasakykite, ką norėtumėte valgyti, ir aš sukursiu patiekalų planą su pirkinių sąrašu
+                        Pats "greit sulakstysi" ar padėt? Ką gero turi šaldytuve? Pasakai ko nori - receptai ir pirkinių krepšelis susidėlios patys, o tu gerk kavą.
                     </p>
                 </header>
 
@@ -89,14 +89,14 @@ export default function App() {
                             <div className="min-h-[500px] p-6">
                                 {!hasContent ? (
                                     <div className="h-full flex flex-col items-center justify-center text-center px-4">
-                                        <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mb-4">
-                                            <Sparkles className="h-8 w-8 text-white" />
+                                        <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center mb-4 shadow-md">
+                                            <img src="/chef-logo.png" alt="Chef" className="h-10 w-10 object-contain" />
                                         </div>
                                         <h2 className="text-lg font-semibold text-slate-900 mb-2">
-                                            Pasiruošę planuoti savo patiekalus?
+                                            Nuo ko pradedam?
                                         </h2>
                                         <p className="text-sm text-slate-500 mb-6 max-w-sm">
-                                            Apibūdinkite, ką norėtumėte valgyti, mitybos pageidavimus ir žmonių skaičių. Aš pasirūpinsiu viskuo!
+                                            Tik nesakyk „nežinau". Parašyk bet kokią užuominą ar kiek žmonių bus, o aš sugalvosiu meniu ir sukrausiu krepšelį.
                                         </p>
                                         <QuickPrompts onSelect={handleSendMessage} />
                                     </div>
@@ -114,8 +114,8 @@ export default function App() {
                                         {/* Loading State */}
                                         {isLoading && (
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-                                                    <span className="text-white text-xs font-medium">AI</span>
+                                                <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center shadow-sm">
+                                                    <img src="/michelin-logo.png" alt="Michelin" className="w-6 h-6 object-contain" />
                                                 </div>
                                                 <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3">
                                                     <div className="flex items-center gap-2">
@@ -136,12 +136,12 @@ export default function App() {
                                         {/* Success State */}
                                         {mealPlan && !isLoading && (
                                             <div className="flex items-start gap-3">
-                                                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-white text-xs font-medium">AI</span>
+                                                <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                                                    <img src="/michelin-logo.png" alt="Michelin" className="w-6 h-6 object-contain" />
                                                 </div>
                                                 <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 flex-1">
                                                     <p className="text-sm text-slate-700">
-                                                        ✨ Sukūriau jums patiekalų planą! Peržiūrėkite meniu ir pirkinių sąrašą dešinėje.
+                                                        Štai ir planas! ✨ Peržiūrėk meniu ir krepšelį dešinėje.
                                                     </p>
                                                 </div>
                                             </div>
@@ -155,7 +155,7 @@ export default function App() {
                                 <ChatInput
                                     onSend={handleSendMessage}
                                     isLoading={isLoading}
-                                    placeholder="Apibūdinkite savo pageidavimus... (pvz., 3 sveikos vakarienės 2 žmonėms)"
+                                    placeholder="Rašyk bet ką ir drąsiai: 'Noriu kažko skanaus, bet sveiko, ir kad nereikėtų plauti indų'"
                                 />
                             </div>
                         </div>
@@ -218,7 +218,7 @@ export default function App() {
                 {/* Extension Info */}
                 <div className="mt-8 text-center">
                     <p className="text-xs text-slate-400">
-                        💡 Įdiekite mūsų Chrome plėtinį, kad automatiškai pridėtumėte produktus į Barbora.lt krepšelį
+                        💡 Įdiekite mūsų Chrome plėtinį, kad automatiškai pridėtumėte produktus į Barbora.lt ar lastmile krepšelį
                     </p>
                 </div>
             </div>
